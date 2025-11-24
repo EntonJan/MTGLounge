@@ -113,9 +113,23 @@
         const { useState, useEffect, useRef, useMemo } = React;
         const generateId = () => Math.random().toString(36).substring(2, 9);
 
-        const Header = ({ user, selectedDeck }) => {
+        // --- 1. Fix: Timer Logic added to Header ---
+        const Header = ({ user, selectedDeck, roomCreatedAt }) => {
             const displayName = user.displayName || user.email.split('@')[0];
             const hexId = user.uid.substring(0, 9).toUpperCase();
+            const [timeString, setTimeString] = useState("00:00");
+
+            useEffect(() => {
+                if (!roomCreatedAt) return;
+                const interval = setInterval(() => {
+                    const now = Date.now();
+                    const diff = Math.floor((now - roomCreatedAt) / 1000);
+                    const m = Math.floor(diff / 60).toString().padStart(2, '0');
+                    const s = (diff % 60).toString().padStart(2, '0');
+                    setTimeString(`${m}:${s}`);
+                }, 1000);
+                return () => clearInterval(interval);
+            }, [roomCreatedAt]);
 
             return (
                 <header className="bg-gray-800 shadow-md p-4 flex-shrink-0 border-b border-gray-700 z-50 relative">
@@ -125,6 +139,11 @@
                             <button onClick={() => window.location.href = 'homescreen.html'} className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-full transition-colors shadow-sm" title="Home Menu">
                                 <i data-lucide="home" className="w-5 h-5"></i>
                             </button>
+                            {roomCreatedAt && (
+                                <div className="bg-black/50 px-3 py-1 rounded text-yellow-400 font-mono font-bold border border-yellow-500/30">
+                                    {timeString}
+                                </div>
+                            )}
                         </div>
                         {selectedDeck && (
                             <div className="hidden md:flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
@@ -154,6 +173,7 @@
             );
         };
 
+        // --- 2. Fix: Change object-cover to object-contain ---
         const CardImage = ({ src, alt, className, style, onClick, onContextMenu, onMouseEnter, onMouseLeave, isBack = false }) => {
             const imageSrc = isBack ? 'https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg' : src;
             return (
@@ -165,7 +185,7 @@
                     onMouseEnter={onMouseEnter}
                     onMouseLeave={onMouseLeave}
                 >
-                    <img src={imageSrc} alt={alt || 'Card Back'} className="w-full h-full object-cover select-none pointer-events-none" />
+                    <img src={imageSrc} alt={alt || 'Card Back'} className="w-full h-full object-contain select-none pointer-events-none" />
                     {!isBack && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>}
                 </div>
             );
@@ -205,14 +225,15 @@
         const GameSim = ({ deck, onLeave, roomId }) => {
             const [roomState, setRoomState] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [opponentHandMaximized, setOpponentHandMaximized] = useState(false);
-            const [playerHandMaximized, setPlayerHandMaximized] = useState(true);
             const [opponentMaximized, setOpponentMaximized] = useState(false);
             const [viewingZone, setViewingZone] = useState(null); 
             const [draggedCard, setDraggedCard] = useState(null);
             const [hoveredCard, setHoveredCard] = useState(null);
             const [libraryMenu, setLibraryMenu] = useState(null);
             const [topCardView, setTopCardView] = useState(null);
+            
+            // --- 4. Fix Part A: Hand Minimize State ---
+            const [isHandMinimized, setIsHandMinimized] = useState(false);
             
             const [leaveGameModal, setLeaveGameModal] = useState(false);
             const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
@@ -224,6 +245,10 @@
 
             const user = window.currentUser;
             const db = window.db;
+
+            // Derived Dimensions based on Hand State
+            const handHeight = isHandMinimized ? '4vh' : '18vh';
+            const sidebarHeight = `calc(100vh - 54.666vh - ${handHeight})`;
 
             useEffect(() => {
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
@@ -276,7 +301,7 @@
                 .catch(e => { initializingRef.current = false; });
             }, [roomState, deck, loading]);
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, opponentHandMaximized, playerHandMaximized, opponentMaximized, viewingZone, leaveGameModal]);
+            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, isHandMinimized]);
 
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
@@ -393,8 +418,6 @@
                     timestamp: Date.now(),
                     deck: deck.name
                 });
-                
-                await window.deleteDoc(roomRef);
                 
                 setLeaveGameModal(false);
                 onLeave();
@@ -516,36 +539,18 @@
                         </Modal>
                     )}
 
-                    {opponentState && opponentHandMaximized && (
-                        <div style={{ height: '18vh' }} className="absolute top-0 left-1/2 transform -translate-x-1/2 z-20 bg-red-900/80 backdrop-blur-sm px-6 py-3 rounded-b-lg border-b border-x border-red-500/50 w-full max-w-[95%]">
+                    {opponentState && (
+                        <div style={{ height: '18vh' }} className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/80 backdrop-blur-sm px-6 py-3 rounded-b-lg border-b border-x border-red-500/50 max-w-[90%]">
                             <div className="flex gap-2 items-center h-full overflow-x-auto scrollbar-hide">
                                 <span className="text-red-400 text-sm font-bold mr-3 flex-shrink-0">Opponent Hand: {opponentState.hand?.length || 0}</span>
                                 {Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (
                                     <CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} />
                                 ))}
                             </div>
-                            <button 
-                                onClick={() => setOpponentHandMaximized(false)}
-                                className="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded"
-                                title="Minimize Opponent Hand"
-                            >
-                                <i data-lucide="chevron-up" className="w-4 h-4"></i>
-                            </button>
                         </div>
                     )}
 
-                    {opponentState && !opponentHandMaximized && (
-                        <button 
-                            onClick={() => setOpponentHandMaximized(true)}
-                            className="absolute top-0 left-1/2 transform -translate-x-1/2 z-20 bg-red-900/80 hover:bg-red-900 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 text-red-400 text-sm font-bold"
-                            title="Show Opponent Hand"
-                        >
-                            <i data-lucide="chevron-down" className="w-4 h-4 inline-block mr-2"></i>
-                            Opponent Hand ({opponentState.hand?.length || 0})
-                        </button>
-                    )}
-
-                    <div style={{ top: opponentHandMaximized ? '18vh' : '0', height: opponentHandMaximized ? 'calc(27.333vh - 18vh)' : '27.333vh' }} className="absolute left-2 z-10 w-56 flex flex-col gap-2 transition-all">
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="absolute left-2 z-40 w-56 flex flex-col gap-2">
                         {opponentState && (
                             <>
                                 <div className="bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0">
@@ -579,7 +584,7 @@
                         )}
                     </div>
 
-                    <div style={{ top: opponentHandMaximized ? '18vh' : '0', height: opponentHandMaximized ? 'calc(27.333vh - 18vh)' : '27.333vh' }} className="absolute right-2 z-10 w-56 flex flex-col gap-2 transition-all">
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="absolute right-2 z-40 w-56 flex flex-col gap-2">
                         {opponentState && (
                             <>
                                 <div className="bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-1 flex flex-col items-center justify-center">
@@ -602,7 +607,7 @@
                         )}
                     </div>
 
-                    <div style={{ top: opponentHandMaximized ? '18vh' : '0', height: opponentHandMaximized ? 'calc(27.333vh - 18vh)' : '27.333vh' }} className="w-full absolute z-0">
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="w-full absolute">
                         <div className="absolute inset-0 bg-red-900/20 border-b-2 border-red-500/50 overflow-hidden p-2">
                             <div className="h-full w-full relative">
                                 {opponentState?.battlefieldLower?.map(card => {
@@ -631,7 +636,7 @@
                         </div>
                     </div>
 
-                    <div style={{ top: '27.333vh', height: '27.333vh' }} className="w-full absolute bg-blue-900/20 border-b-2 border-blue-500/50 overflow-hidden p-2 z-0">
+                    <div style={{ top: '27.333vh', height: '27.333vh' }} className="w-full absolute bg-blue-900/20 border-b-2 border-blue-500/50 overflow-hidden p-2">
                         <div 
                             ref={playerUpperBattlefieldRef}
                             className="h-full w-full relative"
@@ -695,7 +700,8 @@
                         <i data-lucide={opponentMaximized ? "eye-off" : "eye"} className="w-5 h-5"></i>
                     </button>
 
-                    <div style={{ top: '54.666vh', height: playerHandMaximized ? 'calc(100vh - 54.666vh - 18vh)' : 'calc(100vh - 54.666vh)' }} className="w-full absolute z-0 transition-all">
+                    {/* --- 3. Fix: Added sidebar limits (left: 14rem/right: 14rem) to prevent dropping under sidebars --- */}
+                    <div style={{ top: '54.666vh', height: sidebarHeight, left: '14rem', right: '14rem' }} className="absolute">
                         <div className="absolute inset-0 bg-blue-900/20 overflow-hidden p-2">
                             <div 
                                 ref={playerLowerBattlefieldRef}
@@ -724,13 +730,22 @@
                         </div>
                     </div>
 
-                    {playerHandMaximized && (
-                        <div 
-                            style={{ height: '18vh', bottom: 0, maxWidth: 'calc(100vw - 2 * (14rem + 0.5rem))' }} 
-                            className="absolute left-1/2 transform -translate-x-1/2 z-20 bg-blue-900/80 backdrop-blur-sm px-6 py-3 rounded-t-lg border-t border-x border-blue-500/50"
-                            onDrop={(e) => handleDropOnZone(e, 'hand')}
-                            onDragOver={(e) => e.preventDefault()}
+                    <div 
+                        style={{ height: handHeight, bottom: 0 }} 
+                        className="absolute left-1/2 transform -translate-x-1/2 z-50 bg-blue-900/80 backdrop-blur-sm px-6 py-3 rounded-t-lg border-t border-x border-blue-500/50 max-w-[95%] transition-all duration-300"
+                        onDrop={(e) => handleDropOnZone(e, 'hand')}
+                        onDragOver={(e) => e.preventDefault()}
+                    >
+                        {/* --- 4. Fix Part B: Hand Minimize Toggle Button --- */}
+                        <button 
+                            onClick={() => setIsHandMinimized(!isHandMinimized)}
+                            className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gray-800 border border-gray-600 rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-gray-700"
+                            title={isHandMinimized ? "Maximize Hand" : "Minimize Hand"}
                         >
+                            <i data-lucide={isHandMinimized ? "chevron-up" : "chevron-down"} className="w-3 h-3"></i>
+                        </button>
+
+                        {!isHandMinimized ? (
                             <div className="flex gap-2 items-center h-full overflow-x-auto scrollbar-hide">
                                 <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand:</span>
                                 {myState.hand.map(card => (
@@ -750,28 +765,15 @@
                                     </div>
                                 ))}
                             </div>
-                            <button 
-                                onClick={() => setPlayerHandMaximized(false)}
-                                className="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded"
-                                title="Minimize Hand"
-                            >
-                                <i data-lucide="chevron-down" className="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                                {myState.hand.length} Cards in Hand
+                            </div>
+                        )}
+                    </div>
 
-                    {!playerHandMaximized && (
-                        <button 
-                            onClick={() => setPlayerHandMaximized(true)}
-                            className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-20 bg-blue-900/80 hover:bg-blue-900 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 text-blue-400 text-sm font-bold"
-                            title="Show Hand"
-                        >
-                            <i data-lucide="chevron-up" className="w-4 h-4 inline-block mr-2"></i>
-                            Hand ({myState.hand.length})
-                        </button>
-                    )}
-
-                    <div style={{ top: playerHandMaximized ? '54.666vh' : '54.666vh', height: playerHandMaximized ? 'calc(100vh - 54.666vh - 18vh)' : 'calc(100vh - 54.666vh)' }} className="absolute left-2 z-10 w-56 flex flex-col gap-2 transition-all">
+                    {/* Left Sidebar (Stats, Command Zone, etc) - height updated */}
+                    <div style={{ top: '54.666vh', height: sidebarHeight }} className="absolute left-2 z-40 w-56 flex flex-col gap-2 transition-all duration-300">
                         <div className="bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border border-blue-500/50 flex-shrink-0">
                             <h4 className="text-blue-400 text-sm font-bold mb-2">You</h4>
                             <div className="text-white text-sm space-y-1">
@@ -804,28 +806,30 @@
                             </div>
                         </div>
                         
+                        {/* --- 4. Fix Part C: Command Zone grows and fills space --- */}
                         <div 
-                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 flex-1 overflow-hidden flex flex-col"
+                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 flex-1 overflow-hidden flex flex-col transition-all duration-300"
                             onDrop={(e) => handleDropOnZone(e, 'command')}
                             onDragOver={(e) => e.preventDefault()}
                         >
                             <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
-                            <div className="flex flex-wrap gap-2 flex-1 content-start overflow-y-auto scrollbar-hide">
+                            <div className="flex flex-wrap gap-2 flex-grow content-start overflow-y-auto scrollbar-hide h-full">
                                 {myState.commandZone.map(card => (
                                     <div 
                                         key={card.instanceId}
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, card, 'command')}
-                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center"
+                                        className="cursor-pointer w-full flex-grow flex flex-col items-center h-full"
                                     >
+                                        {/* Image set to h-full to grow with container if minimized */}
                                         <CardImage 
                                             src={card.image_url} 
-                                            className="w-16 h-20 hover:scale-110 transition-transform border border-yellow-500"
+                                            className={`hover:scale-105 transition-transform border border-yellow-500 w-full ${isHandMinimized ? 'h-full' : 'h-32'}`}
                                             onMouseEnter={() => setHoveredCard(card.image_url)}
                                             onMouseLeave={() => setHoveredCard(null)}
                                         />
                                         {card.isCommander && (
-                                            <div className="text-yellow-400 text-xs font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
+                                            <div className="text-yellow-400 text-xs font-bold mt-1 flex-shrink-0">Tax: {myState.cmdTax || 0}</div>
                                         )}
                                     </div>
                                 ))}
@@ -835,7 +839,8 @@
                         <button onClick={handleLeaveGame} className="w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">Leave Game</button>
                     </div>
 
-                    <div style={{ top: playerHandMaximized ? '54.666vh' : '54.666vh', height: playerHandMaximized ? 'calc(100vh - 54.666vh - 18vh)' : 'calc(100vh - 54.666vh)' }} className="absolute right-2 z-10 w-56 flex flex-col gap-2 transition-all">
+                    {/* Right Sidebar (Library, Grave, Exile) - height updated */}
+                    <div style={{ top: '54.666vh', height: sidebarHeight }} className="absolute right-2 z-40 w-56 flex flex-col gap-2 transition-all duration-300">
                         <div 
                             className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center"
                             onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })}
@@ -935,7 +940,16 @@
             };
 
             if (view === 'game' && currentRoomId && selectedDeck) {
-                return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
+                // Pass creation time to GameSim/Header for timer
+                const room = rooms.find(r => r.id === currentRoomId);
+                const createdAt = room ? room.createdAt : Date.now();
+                
+                return (
+                    <>
+                        <Header user={user} selectedDeck={selectedDeck} roomCreatedAt={createdAt} />
+                        <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />
+                    </>
+                );
             }
 
             return (
