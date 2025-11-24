@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena - MTG Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: { 
+                extend: { 
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        mtg: {
+                            w: '#F9F3B7', u: '#3A62B7', b: '#1E1E1E', r: '#D64242', g: '#5B9567'
+                        }
+                    }
+                } 
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #111827; color: #e5e5e5; font-family: 'Inter', sans-serif; overflow: hidden; }
+        .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .glass-dark { background: rgba(17, 24, 39, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .card-shadow { box-shadow: -2px 2px 8px rgba(0,0,0,0.5); }
+        .tapped { transform: rotate(90deg); transition: transform 0.2s ease; }
+        .untapped { transform: rotate(0deg); transition: transform 0.2s ease; }
+        
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #eab308; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .coin-spin { animation: flip 1s ease-out; }
+        @keyframes flip { 0% { transform: rotateY(0); } 100% { transform: rotateY(720deg); } }
+    </style>
+</head>
+<body class="h-screen w-screen bg-gray-900 overflow-hidden">
+
+    <div id="app-root" class="h-full w-full">
+        <div class="h-full flex flex-col items-center justify-center">
+            <div class="loader mb-4"></div>
+            <p class="text-gray-400">Connecting to Arena...</p>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB2qmkKq4sYOXDd7mF-Mq1rnCWCfDAWXew",
+            authDomain: "entons-game-tracker.firebaseapp.com",
+            projectId: "entons-game-tracker",
+            storageBucket: "entons-game-tracker.firebasestorage.app",
+            messagingSenderId: "968932411080",
+            appId: "1:968932411080:web:d391ffe5ecbd7852bc47fd",
+            measurementId: "G-KB6JSFEPS1"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        window.db = db;
+        window.auth = auth;
+        window.signOut = signOut;
+        window.updateProfile = updateProfile;
+        window.currentUser = null;
+        window.collection = collection;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDocs = getDocs;
+        window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
+        window.addDoc = addDoc;
+        window.updateDoc = updateDoc;
+        window.query = query;
+        window.where = where;
+        window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
+
+        const renderAuthCheck = () => {
+             onAuthStateChanged(auth, (user) => {
+                const rootElement = document.getElementById('app-root');
+                if (user) {
+                    window.currentUser = user;
+                    if (typeof App !== 'undefined') {
+                        const root = ReactDOM.createRoot(rootElement);
+                        root.render(React.createElement(App, { user: user })); 
+                    } else {
+                        setTimeout(() => {
+                            if (typeof App !== 'undefined') {
+                                const root = ReactDOM.createRoot(rootElement);
+                                root.render(React.createElement(App, { user: user }));
+                            }
+                        }, 100);
+                    }
+                } else {
+                    window.location.href = 'index.html';
+                }
+            });
+        };
+
+        window.onload = renderAuthCheck;
+    </script>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+
+        const Header = ({ user, selectedDeck }) => {
+            const displayName = user.displayName || user.email.split('@')[0];
+            const hexId = user.uid.substring(0, 9).toUpperCase();
+
+            return (
+                <header className="bg-gray-800 shadow-md p-4 flex-shrink-0 border-b border-gray-700 z-50 relative">
+                    <div className="max-w-7xl mx-auto flex justify-between items-center h-full">
+                        <div className="flex items-center space-x-4">
+                            <h1 className="text-2xl font-bold text-red-400 tracking-tight">Arena</h1>
+                            <button onClick={() => window.location.href = 'homescreen.html'} className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-full transition-colors shadow-sm" title="Home Menu">
+                                <i data-lucide="home" className="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        {selectedDeck && (
+                            <div className="hidden md:flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
+                                 <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Playing With</span>
+                                 <span className="text-yellow-400 font-bold text-lg leading-none">{selectedDeck.name}</span>
+                            </div>
+                        )}
+                        <div className="text-right text-sm">
+                            <div className="flex items-center justify-end space-x-2">
+                                 <span className="font-semibold text-white cursor-pointer hover:text-red-300" onClick={async () => {
+                                     const newName = prompt(`Enter new display name:`);
+                                     if (newName && newName.trim()) {
+                                         try { await window.updateProfile(user, { displayName: newName.trim() }); window.location.reload(); } catch(e) {}
+                                     }
+                                 }}>{displayName}</span>
+                                 <span className="text-gray-500">| {hexId}</span>
+                            </div>
+                             <div className="flex items-center justify-end space-x-2 mt-1">
+                                <span className="text-xs text-gray-500">{user.email}</span>
+                                <button onClick={() => window.signOut(window.auth).then(() => window.location.href = 'index.html')} className="text-red-400 hover:text-red-300 text-xs flex items-center">
+                                    <i data-lucide="log-out" className="w-3 h-3 mr-1"></i> Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            );
+        };
+
+        const CardImage = ({ src, alt, className, style, onClick, onContextMenu, onMouseEnter, onMouseLeave, isBack = false }) => {
+            const imageSrc = isBack ? 'https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card_back.jpg' : src;
+            return (
+                <div 
+                    className={`relative rounded-lg overflow-hidden bg-gray-800 ${className}`} 
+                    style={style}
+                    onClick={onClick}
+                    onContextMenu={onContextMenu}
+                    onMouseEnter={onMouseEnter}
+                    onMouseLeave={onMouseLeave}
+                >
+                    <img src={imageSrc} alt={alt || 'Card Back'} className="w-full h-full object-cover select-none pointer-events-none" />
+                    {!isBack && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>}
+                </div>
+            );
+        };
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-gray-800 border border-gray-600 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                            <h3 className="text-xl font-bold text-yellow-400">{title}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white">
+                                <i data-lucide="x" className="w-6 h-6"></i>
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-grow">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ContextMenu = ({ x, y, options, onClose }) => {
+            return (
+                <div className="fixed z-[200] bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[150px]" style={{ left: x, top: y }} onMouseLeave={onClose}>
+                    {options.map((opt, i) => (
+                        <button key={i} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            );
+        };
+
+        const Coin = () => (
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 border border-yellow-700 flex items-center justify-center shadow-lg coin-spin mx-2" title="Starting Player">
+                <span className="text-yellow-900 font-bold text-xs">1</span>
+            </div>
+        );
+        
+        const GameSim = ({ deck, onLeave, roomId }) => {
+            const [roomState, setRoomState] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [opponentMaximized, setOpponentMaximized] = useState(false);
+            const [viewingZone, setViewingZone] = useState(null); 
+            const [draggedCard, setDraggedCard] = useState(null);
+            const [hoveredCard, setHoveredCard] = useState(null);
+            const [libraryMenu, setLibraryMenu] = useState(null);
+            const [topCardView, setTopCardView] = useState(null);
+            
+            const [leaveGameModal, setLeaveGameModal] = useState(false);
+            const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
+
+            const playerLowerBattlefieldRef = useRef(null);
+            const playerUpperBattlefieldRef = useRef(null);
+            const initializingRef = useRef(false);
+            const hasInitializedRef = useRef(false);
+
+            const user = window.currentUser;
+            const db = window.db;
+
+            // Sync Room State
+            useEffect(() => {
+                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                const unsubscribe = window.onSnapshot(roomRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        setRoomState(data);
+                        setLoading(false);
+                        
+                        if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
+                            setGameResult(data.gameResult);
+                            setLeaveGameModal(true);
+                        }
+                    } else { onLeave(); }
+                });
+                return () => unsubscribe();
+            }, [roomId]);
+
+            // Host Logic for Random Start Player
+            useEffect(() => {
+                if (!loading && roomState && roomState.host === user.uid && !roomState.startingPlayer && roomState.players.length === 2) {
+                    const starter = Math.random() < 0.5 ? roomState.players[0] : roomState.players[1];
+                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { startingPlayer: starter });
+                }
+            }, [roomState, loading, user.uid, roomId]);
+
+            // Initialize Player State
+            useEffect(() => {
+                if (loading || !roomState) return;
+                const myId = user.uid;
+                if (roomState.gameState && roomState.gameState[myId]) {
+                    hasInitializedRef.current = true;
+                    return;
+                }
+                if (initializingRef.current || hasInitializedRef.current) return;
+
+                console.log("Initializing Player...");
+                initializingRef.current = true;
+                
+                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false }));
+                for (let i = initLibrary.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]];
+                }
+                const startingHand = initLibrary.splice(0, 7);
+                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true }] : [];
+
+                const initialPlayerState = {
+                    life: 40, commanderDamage: 0, cmdTax: 0,
+                    library: initLibrary, hand: startingHand, 
+                    battlefieldUpper: [], battlefieldLower: [],
+                    graveyard: [], exile: [], commandZone: commander
+                };
+
+                window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    gameState: { [myId]: initialPlayerState }
+                }, { merge: true })
+                .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
+                .catch(e => { initializingRef.current = false; });
+            }, [roomState, deck, loading]);
+
+            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal]);
+
+            const myState = roomState?.gameState?.[user.uid];
+            const opponentId = roomState?.players?.find(p => p !== user.uid);
+            const opponentState = roomState?.gameState?.[opponentId];
+            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
+            const startingPlayerId = roomState?.startingPlayer;
+
+            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+
+            const updateMyState = (updates) => {
+                const updatePayload = {};
+                Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), updatePayload);
+            };
+
+            const drawCard = () => {
+                if (myState.library.length === 0) return;
+                const newLib = [...myState.library];
+                const card = newLib.shift();
+                updateMyState({ library: newLib, hand: [...myState.hand, card] });
+            };
+
+            const shuffleLibrary = () => {
+                const newLib = [...myState.library];
+                for (let i = newLib.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newLib[i], newLib[j]] = [newLib[j], newLib[i]];
+                }
+                updateMyState({ library: newLib });
+            };
+
+            const mulligan = () => {
+                // Shuffle hand back into library and draw 7
+                if (myState.hand.length === 0 && myState.library.length < 7) return;
+                let newLib = [...myState.library, ...myState.hand];
+                
+                // Fisher-Yates shuffle
+                for (let i = newLib.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newLib[i], newLib[j]] = [newLib[j], newLib[i]];
+                }
+                
+                const newHand = newLib.splice(0, 7);
+                updateMyState({ library: newLib, hand: newHand });
+            };
+
+            const playCard = (card, fromZone, targetBattlefield, coords = null) => {
+                let x = coords?.x;
+                let y = coords?.y;
+
+                if (x === undefined || y === undefined) {
+                    // Default spawn logic (next to library on right side)
+                    const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
+                    const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
+                    
+                    // Library/Right Sidebar is approx 240px wide. Spawn to left of it.
+                    x = bfWidth - 360 - (Math.random() * 50); 
+                    y = (bfHeight / 2) - 60 + (Math.random() * 50); // Centered vertically
+                }
+
+                const newCard = { ...card, isTapped: false, x, y };
+                let updates = {};
+                
+                if (targetBattlefield === 'upper') {
+                    updates.battlefieldUpper = [...(myState.battlefieldUpper || []), newCard];
+                } else {
+                    updates.battlefieldLower = [...(myState.battlefieldLower || []), newCard];
+                }
+                
+                if (fromZone === 'hand') updates.hand = myState.hand.filter(c => c.instanceId !== card.instanceId);
+                else if (fromZone === 'command') {
+                    updates.commandZone = myState.commandZone.filter(c => c.instanceId !== card.instanceId);
+                    updates.cmdTax = (myState.cmdTax || 0) + 2;
+                }
+                else if (fromZone === 'graveyard') updates.graveyard = myState.graveyard.filter(c => c.instanceId !== card.instanceId);
+                else if (fromZone === 'exile') updates.exile = myState.exile.filter(c => c.instanceId !== card.instanceId);
+                else if (fromZone === 'library_top') updates.library = myState.library.filter(c => c.instanceId !== card.instanceId);
+                else if (fromZone === 'battlefieldUpper') updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== card.instanceId);
+                else if (fromZone === 'battlefieldLower') updates.battlefieldLower = (myState.battlefieldLower || []).filter(c => c.instanceId !== card.instanceId);
+
+                updateMyState(updates);
+            };
+
+            const moveCardToZone = (card, toZone) => {
+                const filter = c => c.instanceId !== card.instanceId;
+                let updates = {
+                    battlefieldUpper: (myState.battlefieldUpper || []).filter(filter),
+                    battlefieldLower: (myState.battlefieldLower || []).filter(filter),
+                    hand: myState.hand.filter(filter),
+                    graveyard: myState.graveyard.filter(filter),
+                    exile: myState.exile.filter(filter),
+                    commandZone: myState.commandZone.filter(filter),
+                    library: myState.library.filter(filter)
+                };
+
+                if (toZone === 'graveyard') updates.graveyard = [card, ...updates.graveyard];
+                else if (toZone === 'exile') updates.exile = [card, ...updates.exile];
+                else if (toZone === 'hand') updates.hand = [...updates.hand, card];
+                else if (toZone === 'command') updates.commandZone = [card, ...updates.commandZone];
+                else if (toZone === 'library_top') updates.library = [card, ...updates.library];
+                else if (toZone === 'library_bottom') updates.library = [...updates.library, card];
+
+                updateMyState(updates);
+            };
+
+            const toggleTap = (id, battlefield) => {
+                if (battlefield === 'upper') {
+                    const bf = (myState.battlefieldUpper || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
+                    updateMyState({ battlefieldUpper: bf });
+                } else {
+                    const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
+                    updateMyState({ battlefieldLower: bf });
+                }
+            };
+
+            const handleLeaveGame = () => {
+                setLeaveGameModal(true);
+            };
+
+            const submitGameResult = async (winner) => {
+                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                await window.updateDoc(roomRef, {
+                    gameResult: {
+                        winner,
+                        submittedBy: user.uid,
+                        confirmed: false,
+                        timestamp: Date.now()
+                    }
+                });
+            };
+
+            const confirmGameResult = async () => {
+                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                await window.updateDoc(roomRef, {
+                    'gameResult.confirmed': true
+                });
+                
+                const trackerRef = window.collection(db, 'game_results');
+                await window.addDoc(trackerRef, {
+                    roomId,
+                    players: roomState.players,
+                    winner: gameResult.winner,
+                    timestamp: Date.now(),
+                    deck: deck.name
+                });
+                
+                setLeaveGameModal(false);
+                onLeave();
+            };
+
+            const handleDragStart = (e, card, fromZone) => setDraggedCard({ card, fromZone });
+            
+            const handleDropOnBattlefield = (e, targetBattlefield, battlefieldRef) => {
+                e.preventDefault();
+                if (!draggedCard) return;
+                const rect = battlefieldRef.current.getBoundingClientRect();
+                let x = e.clientX - rect.left - 45;
+                let y = e.clientY - rect.top - 60;
+
+                // Safe Zone Check: Prevent drop under Left Sidebar (Life/Command Zone)
+                // Left sidebar is approx 240px wide (w-56 + padding)
+                if (targetBattlefield === 'lower') {
+                    if (x < 240) x = 240;
+                }
+
+                if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
+                    const updates = {};
+                    updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
+                    updates.battlefieldLower = (myState.battlefieldLower || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
+                    
+                    const movedCard = { ...draggedCard.card, x, y };
+                    if (targetBattlefield === 'upper') {
+                        updates.battlefieldUpper = [...updates.battlefieldUpper, movedCard];
+                    } else {
+                        updates.battlefieldLower = [...updates.battlefieldLower, movedCard];
+                    }
+                    updateMyState(updates);
+                } else {
+                    playCard(draggedCard.card, draggedCard.fromZone, targetBattlefield, { x, y });
+                }
+                setDraggedCard(null);
+            };
+
+            const handleDropOnZone = (e, zone) => {
+                e.preventDefault();
+                if (!draggedCard) return;
+                const target = zone === 'library' ? 'library_top' : zone;
+                if (draggedCard.fromZone === target) { setDraggedCard(null); return; }
+                moveCardToZone(draggedCard.card, target);
+                setDraggedCard(null);
+            };
+
+            return (
+                <div className="h-full w-full relative bg-gray-900 overflow-hidden flex flex-col">
+                    
+                    {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
+
+                    {libraryMenu && (
+                        <ContextMenu 
+                            x={libraryMenu.x} y={libraryMenu.y} 
+                            onClose={() => setLibraryMenu(null)}
+                            options={[
+                                { label: 'Draw Card', action: drawCard },
+                                { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } },
+                                { label: 'Shuffle Library', action: shuffleLibrary },
+                                { label: 'View Entire Library', action: () => setViewingZone('library') }
+                            ]} 
+                        />
+                    )}
+
+                    {topCardView && (
+                        <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library">
+                            <div className="flex flex-col items-center gap-4">
+                                <img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" />
+                                <div className="flex gap-4">
+                                    <button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button>
+                                    <button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button>
+                                    <button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {viewingZone && (
+                        <Modal isOpen={true} onClose={() => setViewingZone(null)} title={`Viewing ${viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}`}>
+                            <div className="grid grid-cols-4 gap-4">
+                                {myState[viewingZone]?.map((card, idx) => (
+                                    <div key={idx} className="relative group">
+                                        <img src={card.image_url} className="w-full rounded-lg shadow-lg" />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity">
+                                             <button 
+                                                onClick={() => { playCard(card, viewingZone, 'lower'); }} 
+                                                className="bg-green-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-green-500"
+                                            >Play</button>
+                                            {viewingZone === 'library' && (
+                                                <button 
+                                                    onClick={() => { moveCardToZone(card, 'library_top'); setViewingZone(null); }} 
+                                                    className="bg-yellow-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-yellow-500"
+                                                >Top</button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {leaveGameModal && (
+                        <Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Result">
+                            {!roomState?.gameResult?.submittedBy ? (
+                                <div className="flex flex-col items-center gap-4">
+                                    <p className="text-white text-lg">Who won the game?</p>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => { submitGameResult(user.uid); }} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">I Won</button>
+                                        <button onClick={() => { submitGameResult(opponentId); }} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Opponent Won</button>
+                                        <button onClick={() => { submitGameResult('draw'); }} className="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded text-white font-bold">Draw</button>
+                                    </div>
+                                </div>
+                            ) : roomState.gameResult.submittedBy === user.uid ? (
+                                <div className="flex flex-col items-center gap-4">
+                                    <p className="text-white text-lg">Waiting for opponent to confirm result...</p>
+                                    <div className="loader"></div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center gap-4">
+                                    <p className="text-white text-lg">
+                                        {gameResult.winner === user.uid ? 'You won!' : 
+                                         gameResult.winner === opponentId ? `${opponentName} won!` : 
+                                         'Game was a draw'}
+                                    </p>
+                                    <p className="text-gray-400">Do you confirm this result?</p>
+                                    <div className="flex gap-4">
+                                        <button onClick={confirmGameResult} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">Confirm</button>
+                                        <button onClick={() => setLeaveGameModal(false)} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Dispute</button>
+                                    </div>
+                                </div>
+                            )}
+                        </Modal>
+                    )}
+
+                    {opponentState && (
+                        <div style={{ height: '18vh' }} className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/80 backdrop-blur-sm px-6 py-3 rounded-b-lg border-b border-x border-red-500/50 max-w-[90%]">
+                            <div className="flex gap-2 items-center h-full overflow-x-auto scrollbar-hide">
+                                <span className="text-red-400 text-sm font-bold mr-3 flex-shrink-0">Opponent Hand: {opponentState.hand?.length || 0}</span>
+                                {Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (
+                                    <CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="absolute left-2 z-40 w-56 flex flex-col gap-2">
+                        {opponentState && (
+                            <>
+                                <div className="bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="text-red-400 text-sm font-bold">Opponent</h4>
+                                        {startingPlayerId === opponentId && <Coin />}
+                                    </div>
+                                    <div className="text-white text-sm space-y-1">
+                                        <div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div>
+                                        <div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div>
+                                    </div>
+                                </div>
+                                {opponentState.commandZone?.length > 0 && (
+                                    <div className="bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-1 overflow-hidden flex flex-col">
+                                        <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
+                                        <div className="flex flex-wrap gap-2 flex-1 content-start overflow-y-auto scrollbar-hide">
+                                            {opponentState.commandZone.map(card => (
+                                                <div key={card.instanceId} className="flex flex-col items-center">
+                                                    <CardImage 
+                                                        src={card.image_url} 
+                                                        className="w-16 h-20 border border-yellow-500 flex-shrink-0"
+                                                        onMouseEnter={() => setHoveredCard(card.image_url)}
+                                                        onMouseLeave={() => setHoveredCard(null)}
+                                                    />
+                                                    {card.isCommander && (
+                                                        <div className="text-yellow-400 text-xs font-bold mt-1">Tax: {opponentState.cmdTax || 0}</div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="absolute right-2 z-40 w-56 flex flex-col gap-2">
+                        {opponentState && (
+                            <>
+                                <div className="bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-1 flex flex-col items-center justify-center">
+                                    <h4 className="text-red-400 text-sm font-bold mb-2">Library ({opponentState.library?.length || 0})</h4>
+                                    <CardImage isBack={true} className="w-20 h-28" />
+                                </div>
+                                <div className="bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-1 flex flex-col items-center justify-center">
+                                    <h4 className="text-red-400 text-sm font-bold mb-2">Graveyard ({opponentState.graveyard?.length || 0})</h4>
+                                    {opponentState.graveyard?.[0] && (
+                                        <CardImage src={opponentState.graveyard[0].image_url} className="w-20 h-28" />
+                                    )}
+                                </div>
+                                <div className="bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-1 flex flex-col items-center justify-center">
+                                    <h4 className="text-red-400 text-sm font-bold mb-2">Exile ({opponentState.exile?.length || 0})</h4>
+                                    {opponentState.exile?.[0] && (
+                                        <CardImage src={opponentState.exile[0].image_url} className="w-20 h-28" />
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div style={{ top: '18vh', height: 'calc(27.333vh - 18vh)' }} className="w-full absolute">
+                        <div className="absolute inset-0 bg-red-900/20 border-b-2 border-red-500/50 overflow-hidden p-2">
+                            <div className="h-full w-full relative">
+                                {opponentState?.battlefieldLower?.map(card => {
+                                    const cardHeight = 120;
+                                    let displayY = card.y;
+                                    if (playerLowerBattlefieldRef.current?.clientHeight) {
+                                        const battlefieldHeight = playerLowerBattlefieldRef.current.clientHeight;
+                                        displayY = Math.max(0, Math.min(battlefieldHeight - cardHeight, battlefieldHeight - card.y - cardHeight));
+                                    }
+                                    return (
+                                        <div 
+                                            key={card.instanceId} 
+                                            className="absolute cursor-pointer"
+                                            style={{ left: card.x, top: displayY }}
+                                        >
+                                            <CardImage 
+                                                src={card.image_url} 
+                                                className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
+                                                onMouseEnter={() => setHoveredCard(card.image_url)}
+                                                onMouseLeave={() => setHoveredCard(null)}
+                                            />
+                                        </div>
+                                    );
+                                }) || <div className="flex items-center justify-center h-full text-gray-500 text-sm">Opponent Battlefield</div>}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ top: '27.333vh', height: '27.333vh' }} className="w-full absolute bg-blue-900/20 border-b-2 border-blue-500/50 overflow-hidden p-2">
+                        <div 
+                            ref={playerUpperBattlefieldRef}
+                            className="h-full w-full relative"
+                            onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)}
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                            {(myState.battlefieldUpper || []).map(card => (
+                                <div 
+                                    key={card.instanceId} 
+                                    className="absolute cursor-pointer"
+                                    style={{ left: card.x, top: card.y }}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')}
+                                >
+                                    <CardImage 
+                                        src={card.image_url} 
+                                        className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
+                                        onClick={() => toggleTap(card.instanceId, 'upper')}
+                                        onMouseEnter={() => setHoveredCard(card.image_url)}
+                                        onMouseLeave={() => setHoveredCard(null)}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {opponentMaximized && (
+                        <div style={{ top: '27.333vh', height: '27.333vh' }} className="absolute left-0 w-full bg-red-900/40 backdrop-blur-sm border-b-2 border-red-500/70 z-20 overflow-hidden p-2">
+                            <div className="h-full w-full relative">
+                                {opponentState?.battlefieldUpper?.map(card => {
+                                    const cardHeight = 120;
+                                    let displayY = card.y;
+                                    if (playerUpperBattlefieldRef.current?.clientHeight) {
+                                        const battlefieldHeight = playerUpperBattlefieldRef.current.clientHeight;
+                                        displayY = Math.max(0, Math.min(battlefieldHeight - cardHeight, battlefieldHeight - card.y - cardHeight));
+                                    }
+                                    return (
+                                        <div 
+                                            key={card.instanceId} 
+                                            className="absolute cursor-pointer"
+                                            style={{ left: card.x, top: displayY }}
+                                        >
+                                            <CardImage 
+                                                src={card.image_url} 
+                                                className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
+                                                onMouseEnter={() => setHoveredCard(card.image_url)}
+                                                onMouseLeave={() => setHoveredCard(null)}
+                                            />
+                                        </div>
+                                    );
+                                }) || <div className="flex items-center justify-center h-full text-gray-500">Opponent Upper Battlefield (Overlay)</div>}
+                            </div>
+                        </div>
+                    )}
+
+                    <button 
+                        onClick={() => setOpponentMaximized(!opponentMaximized)}
+                        className="fixed top-[50%] right-4 transform -translate-y-1/2 z-30 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-lg shadow-lg border border-gray-600"
+                        title={opponentMaximized ? "Hide Opponent Upper Field" : "Show Opponent Upper Field"}
+                    >
+                        <i data-lucide={opponentMaximized ? "eye-off" : "eye"} className="w-5 h-5"></i>
+                    </button>
+
+                    <div style={{ top: '54.666vh', height: 'calc(100vh - 54.666vh - 18vh)' }} className="w-full absolute">
+                        <div className="absolute inset-0 bg-blue-900/20 overflow-hidden p-2">
+                            <div 
+                                ref={playerLowerBattlefieldRef}
+                                className="h-full w-full relative"
+                                onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)}
+                                onDragOver={(e) => e.preventDefault()}
+                            >
+                                {(myState.battlefieldLower || []).map(card => (
+                                    <div 
+                                        key={card.instanceId} 
+                                        className="absolute cursor-pointer"
+                                        style={{ left: card.x, top: card.y }}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')}
+                                    >
+                                        <CardImage 
+                                            src={card.image_url} 
+                                            className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
+                                            onClick={() => toggleTap(card.instanceId, 'lower')}
+                                            onMouseEnter={() => setHoveredCard(card.image_url)}
+                                            onMouseLeave={() => setHoveredCard(null)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div 
+                        style={{ height: '18vh', bottom: 0 }} 
+                        className="absolute left-1/2 transform -translate-x-1/2 z-50 bg-blue-900/80 backdrop-blur-sm px-6 py-3 rounded-t-lg border-t border-x border-blue-500/50 max-w-[95%] min-w-[500px]"
+                        onDrop={(e) => handleDropOnZone(e, 'hand')}
+                        onDragOver={(e) => e.preventDefault()}
+                    >
+                        <div className="flex gap-2 items-center h-full relative">
+                            <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand:</span>
+                            <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
+                                {myState.hand.map(card => (
+                                    <div 
+                                        key={card.instanceId}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, card, 'hand')}
+                                        className="cursor-pointer flex-shrink-0"
+                                    >
+                                        <CardImage 
+                                            src={card.image_url} 
+                                            style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }}
+                                            className="hover:scale-110 hover:z-10 transition-transform"
+                                            onMouseEnter={() => setHoveredCard(card.image_url)}
+                                            onMouseLeave={() => setHoveredCard(null)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="absolute -top-3 right-0">
+                                <button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ top: '54.666vh', height: 'calc(100vh - 54.666vh - 18vh)' }} className="absolute left-2 z-40 w-56 flex flex-col gap-2">
+                        <div className="bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border border-blue-500/50 flex-shrink-0">
+                            <div className="flex justify-between items-center mb-2">
+                                <h4 className="text-blue-400 text-sm font-bold">You</h4>
+                                {startingPlayerId === user.uid && <Coin />}
+                            </div>
+                            <div className="text-white text-sm space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <span>Life:</span>
+                                    <span className="text-green-400 font-bold text-lg">{myState.life}</span>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button>
+                                    <button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button>
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    <span>Cmd Dmg:</span>
+                                    <span className="text-red-400 font-bold">{myState.commanderDamage || 0}</span>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button onClick={() => {
+                                        const currentCmdDmg = myState.commanderDamage || 0;
+                                        const newCmdDmg = currentCmdDmg + 1;
+                                        updateMyState({ commanderDamage: newCmdDmg, life: myState.life - 1 });
+                                    }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button>
+                                    <button onClick={() => {
+                                        const currentCmdDmg = myState.commanderDamage || 0;
+                                        if (currentCmdDmg > 0) {
+                                            const newCmdDmg = currentCmdDmg - 1;
+                                            updateMyState({ commanderDamage: newCmdDmg, life: myState.life + 1 });
+                                        }
+                                    }} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500" disabled={!(myState.commanderDamage > 0)}>-</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div 
+                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 flex-1 overflow-hidden flex flex-col"
+                            onDrop={(e) => handleDropOnZone(e, 'command')}
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                            <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
+                            <div className="flex flex-wrap gap-2 flex-1 content-start overflow-y-auto scrollbar-hide">
+                                {myState.commandZone.map(card => (
+                                    <div 
+                                        key={card.instanceId}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, card, 'command')}
+                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center"
+                                    >
+                                        <CardImage 
+                                            src={card.image_url} 
+                                            className="w-16 h-20 hover:scale-110 transition-transform border border-yellow-500"
+                                            onMouseEnter={() => setHoveredCard(card.image_url)}
+                                            onMouseLeave={() => setHoveredCard(null)}
+                                        />
+                                        {card.isCommander && (
+                                            <div className="text-yellow-400 text-xs font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button onClick={handleLeaveGame} className="w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">Leave Game</button>
+                    </div>
+
+                    <div style={{ top: '54.666vh', height: 'calc(100vh - 54.666vh - 18vh)' }} className="absolute right-2 z-40 w-56 flex flex-col gap-2">
+                        <div 
+                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center relative"
+                            onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })}
+                            onDrop={(e) => handleDropOnZone(e, 'library')}
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                            <h4 className="text-blue-400 text-sm font-bold mb-2">Library ({myState.library.length})</h4>
+                            <CardImage isBack={true} className="w-20 h-28" />
+                            <div className="absolute inset-0 bg-blue-500/10 pointer-events-none rounded-lg border-2 border-transparent hover:border-blue-400/50"></div>
+                        </div>
+                        
+                        <div 
+                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center"
+                            onClick={() => setViewingZone('graveyard')}
+                            onDrop={(e) => handleDropOnZone(e, 'graveyard')}
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                            <h4 className="text-blue-400 text-sm font-bold mb-2">Graveyard ({myState.graveyard.length})</h4>
+                            {myState.graveyard[0] && (
+                                <CardImage 
+                                    src={myState.graveyard[0].image_url} 
+                                    className="w-20 h-28"
+                                    onMouseEnter={() => setHoveredCard(myState.graveyard[0].image_url)}
+                                    onMouseLeave={() => setHoveredCard(null)}
+                                />
+                            )}
+                        </div>
+                        
+                        <div 
+                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center"
+                            onClick={() => setViewingZone('exile')}
+                            onDrop={(e) => handleDropOnZone(e, 'exile')}
+                            onDragOver={(e) => e.preventDefault()}
+                        >
+                            <h4 className="text-blue-400 text-sm font-bold mb-2">Exile ({myState.exile.length})</h4>
+                            {myState.exile[0] && (
+                                <CardImage 
+                                    src={myState.exile[0].image_url} 
+                                    className="w-20 h-28"
+                                    onMouseEnter={() => setHoveredCard(myState.exile[0].image_url)}
+                                    onMouseLeave={() => setHoveredCard(null)}
+                                />
+                            )}
+                        </div>
+
+                        <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold">Draw</button>
+                            <button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold">Shuffle</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = ({ user }) => {
+            const [view, setView] = useState('lobby');
+            const [selectedDeck, setSelectedDeck] = useState(null);
+            const [decks, setDecks] = useState([]);
+            const [rooms, setRooms] = useState([]);
+            const [currentRoomId, setCurrentRoomId] = useState(null);
+
+            useEffect(() => {
+                const loadDecks = async () => {
+                    const deckCollection = window.collection(window.db, 'users', user.uid, 'decks');
+                    const snapshot = await window.getDocs(deckCollection);
+                    setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                };
+                loadDecks();
+
+                const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => {
+                    setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
+
+            const createRoom = async () => {
+                if (!selectedDeck) { alert("Select a deck first"); return; }
+                const roomRef = await window.addDoc(window.getPublicRoomCollection(), {
+                    host: user.uid, hostName: user.displayName || user.email.split('@')[0],
+                    players: [user.uid], createdAt: Date.now(), gameState: {}
+                });
+                setCurrentRoomId(roomRef.id);
+                setView('game');
+            };
+
+            const joinRoom = async (roomId) => {
+                if (!selectedDeck) { alert("Select a deck first"); return; }
+                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                await window.updateDoc(roomRef, { players: [rooms.find(r => r.id === roomId).players[0], user.uid] });
+                setCurrentRoomId(roomId);
+                setView('game');
+            };
+
+            const leaveGame = async () => {
+                setView('lobby');
+                setCurrentRoomId(null);
+            };
+
+            if (view === 'game' && currentRoomId && selectedDeck) {
+                return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
+            }
+
+            return (
+                <div className="h-screen flex flex-col bg-gray-900">
+                    <Header user={user} selectedDeck={selectedDeck} />
+                    <div className="flex-grow p-8 overflow-y-auto">
+                        <div className="max-w-6xl mx-auto">
+                            <div className="mb-6">
+                                <h2 className="text-3xl font-bold text-yellow-400 mb-4">Select Your Deck</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {decks.map(deck => (
+                                        <div 
+                                            key={deck.id} 
+                                            onClick={() => setSelectedDeck(deck)}
+                                            className={`p-4 rounded-lg cursor-pointer transition-all ${
+                                                selectedDeck?.id === deck.id 
+                                                    ? 'bg-yellow-600 border-2 border-yellow-400' 
+                                                    : 'bg-gray-800 border border-gray-700 hover:border-yellow-500'
+                                            }`}
+                                        >
+                                            <h3 className="font-bold text-white">{deck.name}</h3>
+                                            <p className="text-sm text-gray-400">{deck.cards?.length || 0} cards</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-yellow-400 mb-4">Create Room</h2>
+                                    <button 
+                                        onClick={createRoom}
+                                        disabled={!selectedDeck}
+                                        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg text-lg"
+                                    >
+                                        <i data-lucide="plus-circle" className="w-6 h-6 inline-block mr-2"></i>
+                                        Create New Room
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <h2 className="text-2xl font-bold text-yellow-400 mb-4">Available Rooms</h2>
+                                    <div className="space-y-2">
+                                        {rooms.filter(r => r.players.length < 2).map(room => (
+                                            <div key={room.id} className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h3 className="font-bold text-white">{room.hostName}'s Room</h3>
+                                                        <p className="text-sm text-gray-400">{room.players.length}/2 players</p>
+                                                    </div>
+                                                    {room.host !== user.uid && (
+                                                        <button 
+                                                            onClick={() => joinRoom(room.id)}
+                                                            disabled={!selectedDeck}
+                                                            className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded"
+                                                        >
+                                            Join
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {rooms.filter(r => r.players.length < 2).length === 0 && (
+                                            <p className="text-gray-500 text-center py-8">No rooms available</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+    </script>
+</body>
+</html>
