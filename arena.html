@@ -1070,6 +1070,21 @@
                 setView('game');
             };
 
+            const deleteRoom = async (roomId, e) => {
+                e.stopPropagation();
+                if(!confirm("Are you sure you want to delete this room?")) return;
+                await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId));
+            };
+
+            const clearMyRooms = async () => {
+                if(!confirm("This will close ALL rooms where you are the host. Continue?")) return;
+                const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid));
+                const snapshot = await window.getDocs(q);
+                snapshot.forEach(async (docSnap) => {
+                    await window.deleteDoc(docSnap.ref);
+                });
+            };
+
             const leaveGame = async () => {
                 if (currentRoomId) {
                     const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId);
@@ -1129,14 +1144,23 @@
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div>
                                     <h2 className="text-2xl font-bold text-yellow-400 mb-4">Create Room</h2>
-                                    <button 
-                                        onClick={createRoom}
-                                        disabled={!selectedDeck}
-                                        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg text-lg"
-                                    >
-                                        <i data-lucide="plus-circle" className="w-6 h-6 inline-block mr-2"></i>
-                                        Create New Room
-                                    </button>
+                                    <div className="flex flex-col gap-4">
+                                        <button 
+                                            onClick={createRoom}
+                                            disabled={!selectedDeck}
+                                            className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg text-lg"
+                                        >
+                                            <i data-lucide="plus-circle" className="w-6 h-6 inline-block mr-2"></i>
+                                            Create New Room
+                                        </button>
+                                        <button 
+                                            onClick={clearMyRooms}
+                                            className="w-full bg-red-900/50 hover:bg-red-800/80 border border-red-700 text-red-200 py-3 px-6 rounded-lg text-sm transition-colors"
+                                        >
+                                            <i data-lucide="trash-2" className="w-4 h-4 inline-block mr-2"></i>
+                                            Clear My Rooms (Cleanup)
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div>
@@ -1157,7 +1181,15 @@
                                                         )}
                                                     </div>
                                                     
-                                                    {room.host !== user.uid && (
+                                                    {room.host === user.uid ? (
+                                                        <button 
+                                                            onClick={(e) => deleteRoom(room.id, e)}
+                                                            className="bg-red-600 hover:bg-red-500 text-white p-2 rounded"
+                                                            title="Delete my room"
+                                                        >
+                                                            <i data-lucide="trash" className="w-5 h-5"></i>
+                                                        </button>
+                                                    ) : (
                                                         <button 
                                                             onClick={() => joinRoom(room.id)}
                                                             disabled={!selectedDeck || !!room.emptyAt}
