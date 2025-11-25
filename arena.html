@@ -370,15 +370,20 @@
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
+            
+            // *** FIX: Moved the loading check up ***
+            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+
             const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
             const currentTurnId = roomState?.currentTurn;
             const phase = roomState?.phase || 'mulligan';
 
             const isMyTurn = currentTurnId === user.uid;
+            // *** FIX: This line is now safe because myState is guaranteed to exist ***
             const showMulligan = phase === 'mulligan' && myState.hand.length > 0;
 
-            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+            // *** FIX: Removed redundant loading check from here ***
 
             const updateMyState = (updates) => {
                 const updatePayload = {}; Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
