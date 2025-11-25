@@ -354,6 +354,13 @@
                 if (initializingRef.current || hasInitializedRef.current) return;
                 initializingRef.current = true;
                 
+                // *** DEFENSIVE CHECK FOR DECK ***
+                if (!deck || !deck.cards) {
+                    console.error("Deck is missing or invalid!", deck);
+                    initializingRef.current = false; 
+                    return; 
+                }
+
                 const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
                 for (let i = initLibrary.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]]; }
                 const startingHand = initLibrary.splice(0, 7);
@@ -371,8 +378,11 @@
             const opponentId = roomState?.players?.find(p => p !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
             
-            // *** FIX: Moved the loading check up ***
-            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+            // *** FIX: More defensive loading check ***
+            // This waits for `myState` to be an object AND for `myState.hand` to be initialized.
+            if (loading || !myState || !myState.hand) {
+                return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+            }
 
             const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
@@ -380,10 +390,8 @@
             const phase = roomState?.phase || 'mulligan';
 
             const isMyTurn = currentTurnId === user.uid;
-            // *** FIX: This line is now safe because myState is guaranteed to exist ***
+            // This line is now safe because the guard check above ensures `myState.hand` exists
             const showMulligan = phase === 'mulligan' && myState.hand.length > 0;
-
-            // *** FIX: Removed redundant loading check from here ***
 
             const updateMyState = (updates) => {
                 const updatePayload = {}; Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
@@ -393,8 +401,6 @@
             const drawCard = () => { 
                 if (myState.library.length === 0) return; 
                 if (phase === 'mulligan' && user.uid === startingPlayerId) {
-                    // This logic seems flawed if both players can draw, but for now we keep it to switch phase
-                    // The standard EDH logic requires both players to confirm mulligans before the draw phase
                     window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { phase: 'game', showMulliganSummary: true });
                 }
                 const newLib = [...myState.library]; const card = newLib.shift(); 
@@ -407,7 +413,7 @@
                 if (myState.hand.length === 0 && myState.library.length < 7) return; 
                 let newLib = [...myState.library, ...myState.hand]; 
                 for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } 
-                const newHand = newLib.splice(0, myState.hand.length - 1); // Commander Mulligan rule: draw 7, then scry, then if you mulligan again, draw 6, etc. This simplified version just draws one less.
+                const newHand = newLib.splice(0, myState.hand.length - 1);
                 updateMyState({ library: newLib, hand: newHand, mulliganCount: (myState.mulliganCount || 0) + 1 }); 
             };
 
@@ -433,7 +439,6 @@
                 const filter = c => c.instanceId !== card.instanceId;
                 let updates = { battlefieldUpper: (myState.battlefieldUpper || []).filter(filter), battlefieldLower: (myState.battlefieldLower || []).filter(filter), hand: myState.hand.filter(filter), graveyard: myState.graveyard.filter(filter), exile: myState.exile.filter(filter), commandZone: myState.commandZone.filter(filter), library: myState.library.filter(filter) };
                 
-                // --- ROBUST TOKEN DELETE LOGIC (Existing fix) ---
                 if (card.isToken || (card.type_line && card.type_line.includes('Token'))) {
                     updateMyState(updates); 
                     return;
@@ -686,7 +691,6 @@
             useEffect(() => { const loadDecks = async () => { const deckCollection = window.collection(window.db, 'users', user.uid, 'decks'); const snapshot = await window.getDocs(deckCollection); setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }; loadDecks(); const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => { setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }); const cleanupInterval = setInterval(async () => { const now = Date.now(); const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection()); roomsSnapshot.docs.forEach(async (docSnap) => { const data = docSnap.data(); if (data.emptyAt && data.emptyAt <= now) await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id)); }); }, 10000); return () => { unsubscribe(); clearInterval(cleanupInterval); }; }, []);
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
-            // ** FIX: Added try...catch block for robust error handling **
             const createRoom = async () => { 
                 if (!selectedDeck) { 
                     alert("Select a deck first"); 
@@ -710,7 +714,6 @@
                 }
             };
             
-            // ** FIX: Added try...catch block and room check for robust error handling **
             const joinRoom = async (roomId) => { 
                 if (!selectedDeck) { 
                     alert("Select a deck first"); 
@@ -727,7 +730,7 @@
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId); 
                     
                     await window.updateDoc(roomRef, { 
-                        players: [...room.players, user.uid], // Ensure we don't overwrite if host already left, just append
+                        players: [...room.players, user.uid],
                         emptyAt: null, 
                         [`playerDecks.${user.uid}`]: selectedDeck 
                     }); 
@@ -743,7 +746,27 @@
             const deleteRoom = async (roomId, e) => { e.stopPropagation(); if(!confirm("Delete room?")) return; await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId)); };
             const clearMyRooms = async () => { if(!confirm("Close ALL your rooms?")) return; const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid)); const snapshot = await window.getDocs(q); snapshot.forEach(async (docSnap) => await window.deleteDoc(docSnap.ref)); };
             const leaveGame = async () => { if (currentRoomId) { const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId); const roomSnap = await window.getDocs(window.query(window.getPublicRoomCollection(), window.where('__name__', '==', currentRoomId))); if (!roomSnap.empty) { const roomData = roomSnap.docs[0].data(); const remainingPlayers = roomData.players.filter(p => p !== user.uid); if (remainingPlayers.length === 0) await window.updateDoc(roomRef, { players: [], emptyAt: Date.now() + ROOM_TIMEOUT_MS }); else await window.updateDoc(roomRef, { players: remainingPlayers, emptyAt: null }); } } setView('lobby'); setCurrentRoomId(null); };
-            if (view === 'game' && currentRoomId && selectedDeck) return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
+            
+            // *** FIX: Added check for selectedDeck before rendering GameSim ***
+            if (view === 'game' && currentRoomId && selectedDeck) {
+                return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
+            }
+            // *** FIX: Handle case where view is 'game' but deck isn't ready (e.g. on refresh)
+            if (view === 'game' && !selectedDeck) {
+                 return (
+                    <div className="h-screen flex flex-col bg-gray-900">
+                        <Header user={user} selectedDeck={null} />
+                        <div className="flex-grow p-8 overflow-y-auto flex flex-col items-center justify-center">
+                            <h2 className="text-2xl font-bold text-red-500 mb-4">Error: No Deck Selected</h2>
+                            <p className="text-gray-400 mb-6">Your session may have expired. Please return to the lobby.</p>
+                            <button onClick={leaveGame} className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-lg">
+                                Back to Lobby
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="h-screen flex flex-col bg-gray-900">
                     <Header user={user} selectedDeck={selectedDeck} />
