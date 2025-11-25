@@ -366,13 +366,39 @@
                 const startingHand = initLibrary.splice(0, 7);
                 const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: [] }] : [];
 
-                const initialPlayerState = { life: 40, commanderDamage: 0, cmdTax: 0, mulliganCount: 0, library: initLibrary, hand: startingHand, battlefieldUpper: [], battlefieldLower: [], graveyard: [], exile: [], commandZone: commander };
+                const initialPlayerState = { 
+                    life: 40, commanderDamage: 0, cmdTax: 0, mulliganCount: 0, 
+                    library: initLibrary, hand: startingHand, 
+                    battlefieldUpper: [], battlefieldLower: [], 
+                    graveyard: [], exile: [], commandZone: commander,
+                    phase: 'mulligan', // Player's local phase
+                    playerReady: false 
+                };
                 window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), { gameState: { [myId]: initialPlayerState } }, { merge: true })
                 .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
                 .catch(e => { initializingRef.current = false; });
             }, [roomState, deck, loading]);
+            
+            const globalPhase = roomState?.phase || 'mulligan'; // Get global phase
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, tokenSelectorModalOpen, mulliganSummaryModal]);
+            // *** NEW: useEffect for Host to start game ***
+            useEffect(() => {
+                if (roomState && globalPhase === 'mulligan' && roomState.host === user.uid && roomState.players.length === 2) {
+                    const player1State = roomState.gameState?.[roomState.players[0]];
+                    const player2State = roomState.gameState?.[roomState.players[1]];
+
+                    if (player1State?.playerReady && player2State?.playerReady) {
+                        // Both players are ready, start the game!
+                        window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { 
+                            phase: 'game', 
+                            showMulliganSummary: true 
+                        });
+                    }
+                }
+            }, [roomState, user.uid, globalPhase, roomId]);
+
+
+            useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, tokenSelectorModalOpen, mulliganSummaryModal, globalPhase]);
 
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
@@ -387,11 +413,18 @@
             const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
             const currentTurnId = roomState?.currentTurn;
-            const phase = roomState?.phase || 'mulligan';
+            
+            const myLocalPhase = myState?.phase || 'mulligan'; // Get my local phase
+            const cardsToBottomCount = useMemo(() => {
+                if (myLocalPhase !== 'put_to_bottom') return 0;
+                return Math.max(0, (myState.mulliganCount || 0) - 1);
+            }, [myState]);
 
             const isMyTurn = currentTurnId === user.uid;
-            // This line is now safe because the guard check above ensures `myState.hand` exists
-            const showMulligan = phase === 'mulligan' && myState.hand.length > 0;
+            
+            const showMulliganUI = globalPhase === 'mulligan' && myLocalPhase === 'mulligan' && myState.hand.length > 0;
+            const showPutToBottomUI = globalPhase === 'mulligan' && myLocalPhase === 'put_to_bottom' && cardsToBottomCount > 0;
+
 
             const updateMyState = (updates) => {
                 const updatePayload = {}; Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
@@ -400,9 +433,6 @@
 
             const drawCard = () => { 
                 if (myState.library.length === 0) return; 
-                if (phase === 'mulligan' && user.uid === startingPlayerId) {
-                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { phase: 'game', showMulliganSummary: true });
-                }
                 const newLib = [...myState.library]; const card = newLib.shift(); 
                 updateMyState({ library: newLib, hand: [...myState.hand, card] }); 
             };
@@ -413,8 +443,50 @@
                 if (myState.hand.length === 0 && myState.library.length < 7) return; 
                 let newLib = [...myState.library, ...myState.hand]; 
                 for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } 
-                const newHand = newLib.splice(0, myState.hand.length - 1);
-                updateMyState({ library: newLib, hand: newHand, mulliganCount: (myState.mulliganCount || 0) + 1 }); 
+                const newHand = newLib.splice(0, 7); // ALWAYS draw 7
+                updateMyState({ 
+                    library: newLib, 
+                    hand: newHand, 
+                    mulliganCount: (myState.mulliganCount || 0) + 1 
+                }); 
+            };
+
+            const keepHand = () => {
+                const numToBottom = Math.max(0, (myState.mulliganCount || 0) - 1);
+                if (numToBottom === 0) {
+                    updateMyState({ 
+                        playerReady: true,
+                        phase: 'waiting' // This player is done mulliganing
+                    });
+                } else {
+                    updateMyState({ phase: 'put_to_bottom' });
+                }
+            };
+            
+            const putCardToBottom = (card) => {
+                if (myLocalPhase !== 'put_to_bottom' || cardsToBottomCount <= 0) return;
+
+                const newHand = myState.hand.filter(c => c.instanceId !== card.instanceId);
+                const newLibrary = [...myState.library, card]; // Add to bottom
+                
+                // Check if this is the last card
+                const handShouldHave = 7 - cardsToBottomCount;
+
+                if (newHand.length === handShouldHave) {
+                    // Done.
+                    updateMyState({
+                        hand: newHand,
+                        library: newLibrary,
+                        phase: 'waiting',
+                        playerReady: true
+                    });
+                } else {
+                    // Not done.
+                    updateMyState({
+                        hand: newHand,
+                        library: newLibrary
+                    });
+                }
             };
 
             const passTurn = () => { if (!isMyTurn) return; window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { currentTurn: opponentId }); };
@@ -635,7 +707,7 @@
 
                     {/* --- PLAYER UI --- */}
                     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
-                        {isMyTurn && (
+                        {isMyTurn && globalPhase === 'game' && (
                             <button onClick={passTurn} className="mb-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg border-2 border-yellow-400 animate-bounce">
                                 Pass Turn
                             </button>
@@ -645,7 +717,52 @@
                         ) : (
                             <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]" onDrop={(e) => handleDropOnZone(e, 'hand')} onDragOver={(e) => e.preventDefault()}>
                                 <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
-                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide"><span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span><div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">{myState.hand.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} className="cursor-pointer flex-shrink-0"><CardImage src={card.image_url} style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} className="hover:scale-110 hover:z-10 transition-transform" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>{phase === 'mulligan' && showMulligan && (<div className="absolute -top-3 right-8"><button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button></div>)}</div>
+                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide">
+                                    <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">
+                                        {showPutToBottomUI ? `Lege ${cardsToBottomCount} zurück` : 'Hand'}
+                                    </span>
+                                    <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
+                                        {myState.hand.map(card => (
+                                            <div 
+                                                key={card.instanceId} 
+                                                draggable={!showPutToBottomUI} // Can't drag when putting to bottom
+                                                onDragStart={(e) => !showPutToBottomUI && handleDragStart(e, card, 'hand')} 
+                                                onClick={() => showPutToBottomUI && putCardToBottom(card)} // Click to put to bottom
+                                                className="cursor-pointer flex-shrink-0"
+                                            >
+                                                <CardImage 
+                                                    src={card.image_url} 
+                                                    style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} 
+                                                    className={`hover:scale-110 hover:z-10 transition-transform ${showPutToBottomUI ? 'hover:ring-2 hover:ring-red-500' : ''}`} 
+                                                    onMouseEnter={() => setHoveredCard(card.image_url)} 
+                                                    onMouseLeave={() => setHoveredCard(null)} 
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {showMulliganUI && (
+                                        <div className="absolute -top-3 right-8 flex gap-2">
+                                            <button 
+                                                onClick={keepHand} 
+                                                className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg border border-green-400"
+                                            >
+                                                KEEP
+                                            </button>
+                                            <button 
+                                                onClick={mulligan} 
+                                                className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" 
+                                                title={`Mulligan ${myState.mulliganCount + 1} (Draw 7)`}
+                                            >
+                                                MULLIGAN
+                                            </button>
+                                        </div>
+                                    )}
+                                    {globalPhase === 'mulligan' && myState.playerReady && (
+                                        <div className="absolute -top-3 right-8 flex gap-2">
+                                            <span className="text-gray-400 text-xs font-bold px-3 py-1">Warte auf Gegner...</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -659,7 +776,7 @@
                         <div className={`bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${isMyTurn ? 'active-turn border-green-500' : 'border-blue-500/50'}`}>
                             <div className="flex justify-between items-center mb-2">
                                 <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2">
-                                    You {isMyTurn && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">YOUR TURN</span>}
+                                    You {isMyTurn && globalPhase === 'game' && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">YOUR TURN</span>}
                                 </h4>
                                 {startingPlayerId === user.uid && <Coin />}
                             </div>
@@ -747,11 +864,9 @@
             const clearMyRooms = async () => { if(!confirm("Close ALL your rooms?")) return; const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid)); const snapshot = await window.getDocs(q); snapshot.forEach(async (docSnap) => await window.deleteDoc(docSnap.ref)); };
             const leaveGame = async () => { if (currentRoomId) { const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId); const roomSnap = await window.getDocs(window.query(window.getPublicRoomCollection(), window.where('__name__', '==', currentRoomId))); if (!roomSnap.empty) { const roomData = roomSnap.docs[0].data(); const remainingPlayers = roomData.players.filter(p => p !== user.uid); if (remainingPlayers.length === 0) await window.updateDoc(roomRef, { players: [], emptyAt: Date.now() + ROOM_TIMEOUT_MS }); else await window.updateDoc(roomRef, { players: remainingPlayers, emptyAt: null }); } } setView('lobby'); setCurrentRoomId(null); };
             
-            // *** FIX: Added check for selectedDeck before rendering GameSim ***
             if (view === 'game' && currentRoomId && selectedDeck) {
                 return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
             }
-            // *** FIX: Handle case where view is 'game' but deck isn't ready (e.g. on refresh)
             if (view === 'game' && !selectedDeck) {
                  return (
                     <div className="h-screen flex flex-col bg-gray-900">
