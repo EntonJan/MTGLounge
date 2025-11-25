@@ -127,16 +127,16 @@
 
         // --- CONSTANTS WITH REAL IMAGES ---
         const COMMON_TOKENS = [
-            { name: 'Treasure', type: 'Artifact Token', image: 'https://cards.scryfall.io/large/front/6/e/6e84d47b-83f8-41f4-90f9-81335b8f2f53.jpg' },
+            { name: 'Treasure', type: 'Artifact Token', image: 'https://cards.scryfall.io/large/front/f/7/f707f66a-200c-448e-bf0e-52b3149e97cb.jpg' },
             { name: 'Food', type: 'Artifact Token', image: 'https://cards.scryfall.io/large/front/b/f/bf36408d-ed85-497f-8e68-d3a922c388a0.jpg' },
-            { name: 'Clue', type: 'Artifact Token', image: 'https://cards.scryfall.io/large/front/0/0/0088de00-d310-4c08-a56f-e085a6791f42.jpg' },
-            { name: 'Soldier (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/7/3/73c1b01c-d766-41f2-9861-12502b0cffb3.jpg' },
-            { name: 'Goblin (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/b/d/bd08c2a3-f9a8-406b-a2c2-b5b155f3408c.jpg' },
-            { name: 'Zombie (2/2)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/8/e/8e5e1e07-f316-43c1-8f9f-7d1a5c6ca801.jpg' },
-            { name: 'Angel (4/4)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/f/e/fe261e68-0e86-444a-b14a-11e0f06795f0.jpg' },
-            { name: 'Elf Warrior (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/9/d/9dd015b6-4b61-41e3-a4c8-479c094af7d2.jpg' },
-            { name: 'Dragon (5/5)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/8/c/8c7827e8-4228-4f1b-a45e-5b12163b784a.jpg' },
-            { name: 'Copy', type: 'Token', image: 'https://cards.scryfall.io/large/front/4/f/4f4931ce-18f3-4fac-b8c7-99ea78f4019a.jpg' }
+            { name: 'Clue', type: 'Artifact Token', image: 'https://cards.scryfall.io/large/front/5/e/5e94b238-0ef9-472e-8557-040ebdb00010.jpg' },
+            { name: 'Soldier (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/6/0/6091b64b-2525-4578-8d26-614d64233fb5.jpg' },
+            { name: 'Goblin (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/4/5/453b0542-f8c3-424a-8742-83508491563f.jpg' },
+            { name: 'Zombie (2/2)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/b/7/b7c93603-90d1-4122-b258-a400c25a7460.jpg' },
+            { name: 'Angel (4/4)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/c/3/c315eb3d-3b95-4424-8187-578912e61408.jpg' },
+            { name: 'Elf Warrior (1/1)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/7/3/73b320cd-6750-482a-99fb-87063c18e1d6.jpg' },
+            { name: 'Dragon (5/5)', type: 'Creature Token', image: 'https://cards.scryfall.io/large/front/a/1/a1b85355-6625-45bb-b301-443905581816.jpg' },
+            { name: 'Copy', type: 'Token', image: 'https://cards.scryfall.io/large/front/0/b/0b889396-857e-4171-9c60-ec73748ba42d.jpg' }
         ];
 
         const COUNTER_TYPES = [
@@ -299,7 +299,7 @@
 
             const playerLowerBattlefieldRef = useRef(null);
             const playerUpperBattlefieldRef = useRef(null);
-            const initializingRef = useRef(false);
+            const initializingRef = useRef(null);
             const hasInitializedRef = useRef(false);
 
             const user = window.currentUser;
@@ -354,204 +354,175 @@
                 if (initializingRef.current || hasInitializedRef.current) return;
                 initializingRef.current = true;
                 
-                // *** DEFENSIVE CHECK FOR DECK ***
-                if (!deck || !deck.cards) {
-                    console.error("Deck is missing or invalid!", deck);
-                    initializingRef.current = false; 
-                    return; 
-                }
-
                 const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
                 for (let i = initLibrary.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]]; }
                 const startingHand = initLibrary.splice(0, 7);
-                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: [] }] : [];
+                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, counters: [] }] : [];
 
-                const initialPlayerState = { 
-                    life: 40, commanderDamage: 0, cmdTax: 0, mulliganCount: 0, 
-                    library: initLibrary, hand: startingHand, 
-                    battlefieldUpper: [], battlefieldLower: [], 
-                    graveyard: [], exile: [], commandZone: commander,
-                    phase: 'mulligan', // Player's local phase
-                    playerReady: false 
+                const myState = {
+                    library: initLibrary,
+                    hand: startingHand,
+                    battlefieldUpper: [],
+                    battlefieldLower: [],
+                    graveyard: [],
+                    exile: [],
+                    commandZone: commander,
+                    life: 40,
+                    commanderDamage: 0,
+                    cmdTax: 0
                 };
-                window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), { gameState: { [myId]: initialPlayerState } }, { merge: true })
-                .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
-                .catch(e => { initializingRef.current = false; });
-            }, [roomState, deck, loading]);
-            
-            const globalPhase = roomState?.phase || 'mulligan'; // Get global phase
 
-            // *** NEW: useEffect for Host to start game ***
-            useEffect(() => {
-                if (roomState && globalPhase === 'mulligan' && roomState.host === user.uid && roomState.players.length === 2) {
-                    const player1State = roomState.gameState?.[roomState.players[0]];
-                    const player2State = roomState.gameState?.[roomState.players[1]];
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    [`gameState.${myId}`]: myState,
+                    [`mulliganSummaryConfirmed.${myId}`]: false,
+                }).then(() => {
+                    hasInitializedRef.current = true;
+                    initializingRef.current = false;
+                });
 
-                    if (player1State?.playerReady && player2State?.playerReady) {
-                        // Both players are ready, start the game!
-                        window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { 
-                            phase: 'game', 
-                            showMulliganSummary: true 
-                        });
-                    }
-                }
-            }, [roomState, user.uid, globalPhase, roomId]);
-
-
-            useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, tokenSelectorModalOpen, mulliganSummaryModal, globalPhase]);
+            }, [roomState, loading, user.uid, roomId, deck]);
 
             const myState = roomState?.gameState?.[user.uid];
-            const opponentId = roomState?.players?.find(p => p !== user.uid);
+            const opponentId = roomState?.players?.find(id => id !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
-            
-            // *** FIX: More defensive loading check ***
-            // This waits for `myState` to be an object AND for `myState.hand` to be initialized.
-            if (loading || !myState || !myState.hand) {
-                return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
-            }
-
-            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
+            const opponentName = roomState?.playerNames?.[opponentId] || 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
+            const phase = roomState?.phase;
             const currentTurnId = roomState?.currentTurn;
-            
-            const myLocalPhase = myState?.phase || 'mulligan'; // Get my local phase
-            const cardsToBottomCount = useMemo(() => {
-                if (myLocalPhase !== 'put_to_bottom') return 0;
-                return Math.max(0, (myState.mulliganCount || 0) - 1);
-            }, [myState]);
-
             const isMyTurn = currentTurnId === user.uid;
             
-            const showMulliganUI = globalPhase === 'mulligan' && myLocalPhase === 'mulligan' && myState.hand.length > 0;
-            const showPutToBottomUI = globalPhase === 'mulligan' && myLocalPhase === 'put_to_bottom' && cardsToBottomCount > 0;
+            const showMulligan = phase === 'mulligan' && myState?.hand.length > 0;
 
+            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
 
             const updateMyState = (updates) => {
-                const updatePayload = {}; Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
+                const updatePayload = {};
+                Object.keys(updates).forEach(key => {
+                    updatePayload[`gameState.${user.uid}.${key}`] = updates[key];
+                });
                 window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), updatePayload);
             };
 
             const drawCard = () => { 
                 if (myState.library.length === 0) return; 
-                const newLib = [...myState.library]; const card = newLib.shift(); 
-                updateMyState({ library: newLib, hand: [...myState.hand, card] }); 
-            };
-
-            const shuffleLibrary = () => { const newLib = [...myState.library]; for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } updateMyState({ library: newLib }); };
-            
-            const mulligan = () => { 
-                if (myState.hand.length === 0 && myState.library.length < 7) return; 
-                let newLib = [...myState.library, ...myState.hand]; 
-                for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } 
-                const newHand = newLib.splice(0, 7); // ALWAYS draw 7
-                updateMyState({ 
-                    library: newLib, 
-                    hand: newHand, 
-                    mulliganCount: (myState.mulliganCount || 0) + 1 
-                }); 
-            };
-
-            const keepHand = () => {
-                const numToBottom = Math.max(0, (myState.mulliganCount || 0) - 1);
-                if (numToBottom === 0) {
-                    updateMyState({ 
-                        playerReady: true,
-                        phase: 'waiting' // This player is done mulliganing
-                    });
-                } else {
-                    updateMyState({ phase: 'put_to_bottom' });
-                }
-            };
-            
-            const putCardToBottom = (card) => {
-                if (myLocalPhase !== 'put_to_bottom' || cardsToBottomCount <= 0) return;
-
-                const newHand = myState.hand.filter(c => c.instanceId !== card.instanceId);
-                const newLibrary = [...myState.library, card]; // Add to bottom
                 
-                // Check if this is the last card
-                const handShouldHave = 7 - cardsToBottomCount;
-
-                if (newHand.length === handShouldHave) {
-                    // Done.
-                    updateMyState({
-                        hand: newHand,
-                        library: newLibrary,
-                        phase: 'waiting',
-                        playerReady: true
-                    });
-                } else {
-                    // Not done.
-                    updateMyState({
-                        hand: newHand,
-                        library: newLibrary
-                    });
-                }
+                // FEHLERBEHEBUNG: Der Block zur sofortigen Phasen-Umschaltung im Mulligan wurde entfernt.
+                
+                const newLib = [...myState.library]; 
+                const card = newLib.shift(); 
+                updateMyState({ library: newLib, hand: [...myState.hand, { ...card, instanceId: generateId() }] }); 
             };
 
-            const passTurn = () => { if (!isMyTurn) return; window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { currentTurn: opponentId }); };
-            const confirmMulliganSummary = () => { window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { [`mulliganSummaryConfirmed.${user.uid}`]: true }); setMulliganSummaryModal(false); };
+            const shuffleLibrary = () => {
+                const newLib = [...myState.library];
+                for (let i = newLib.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newLib[i], newLib[j]] = [newLib[j], newLib[i]];
+                }
+                updateMyState({ library: newLib });
+            };
 
-            const playCard = (card, fromZone, targetBattlefield, coords = null) => {
-                let x = coords?.x, y = coords?.y;
-                if (x === undefined) { const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth; x = bfWidth - 360 - (Math.random() * 50); y = (playerLowerBattlefieldRef.current?.clientHeight || 300) / 2 - 60; }
-                const newCard = { ...card, isTapped: false, x, y }; let updates = {};
-                if (targetBattlefield === 'upper') updates.battlefieldUpper = [...(myState.battlefieldUpper || []), newCard]; else updates.battlefieldLower = [...(myState.battlefieldLower || []), newCard];
+            const playCard = (card, fromZone, toBattlefield, position = { x: 50, y: 50 }) => {
+                const updates = {};
+                const targetBattlefield = toBattlefield === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+                const newCard = { ...card, isTapped: false, x: position.x, y: position.y, counters: [] };
+
+                updates[targetBattlefield] = [...(myState[targetBattlefield] || []), newCard];
+
                 if (fromZone === 'hand') updates.hand = myState.hand.filter(c => c.instanceId !== card.instanceId);
-                else if (fromZone === 'command') { updates.commandZone = myState.commandZone.filter(c => c.instanceId !== card.instanceId); updates.cmdTax = (myState.cmdTax || 0) + 2; }
+                else if (fromZone === 'command') {
+                    updates.commandZone = myState.commandZone.filter(c => c.instanceId !== card.instanceId);
+                    updates.cmdTax = (myState.cmdTax || 0) + 2;
+                }
                 else if (fromZone === 'graveyard') updates.graveyard = myState.graveyard.filter(c => c.instanceId !== card.instanceId);
                 else if (fromZone === 'exile') updates.exile = myState.exile.filter(c => c.instanceId !== card.instanceId);
                 else if (fromZone === 'library_top' || fromZone === 'library') updates.library = myState.library.filter(c => c.instanceId !== card.instanceId);
                 else if (fromZone === 'battlefieldUpper') updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== card.instanceId);
                 else if (fromZone === 'battlefieldLower') updates.battlefieldLower = (myState.battlefieldLower || []).filter(c => c.instanceId !== card.instanceId);
+
                 updateMyState(updates);
             };
 
             const moveCardToZone = (card, toZone) => {
                 const filter = c => c.instanceId !== card.instanceId;
-                let updates = { battlefieldUpper: (myState.battlefieldUpper || []).filter(filter), battlefieldLower: (myState.battlefieldLower || []).filter(filter), hand: myState.hand.filter(filter), graveyard: myState.graveyard.filter(filter), exile: myState.exile.filter(filter), commandZone: myState.commandZone.filter(filter), library: myState.library.filter(filter) };
-                
-                if (card.isToken || (card.type_line && card.type_line.includes('Token'))) {
-                    updateMyState(updates); 
-                    return;
-                }
+                const updates = {};
 
-                const cleanCard = { ...card, isTapped: false, counters: [] };
-                if (toZone === 'graveyard') updates.graveyard = [cleanCard, ...updates.graveyard];
-                else if (toZone === 'exile') updates.exile = [cleanCard, ...updates.exile];
-                else if (toZone === 'hand') updates.hand = [...updates.hand, cleanCard];
-                else if (toZone === 'command') updates.commandZone = [cleanCard, ...updates.commandZone];
-                else if (toZone === 'library_top') updates.library = [cleanCard, ...updates.library];
-                else if (toZone === 'library_bottom') updates.library = [...updates.library, cleanCard];
+                // Determine original zone and remove card
+                if (myState.hand.some(filter)) updates.hand = myState.hand.filter(filter);
+                else if (myState.battlefieldUpper.some(filter)) updates.battlefieldUpper = myState.battlefieldUpper.filter(filter);
+                else if (myState.battlefieldLower.some(filter)) updates.battlefieldLower = myState.battlefieldLower.filter(filter);
+                else if (myState.graveyard.some(filter)) updates.graveyard = myState.graveyard.filter(filter);
+                else if (myState.exile.some(filter)) updates.exile = myState.exile.filter(filter);
+                else if (myState.commandZone.some(filter)) updates.commandZone = myState.commandZone.filter(filter);
+                else if (myState.library.some(filter)) updates.library = myState.library.filter(filter);
+
+                // Add card to new zone
+                const cardWithTaps = { ...card, isTapped: false, x: undefined, y: undefined, counters: card.counters || [] };
+
+                if (toZone === 'hand') updates.hand = [...updates.hand, cardWithTaps];
+                else if (toZone === 'graveyard') updates.graveyard = [...updates.graveyard, cardWithTaps];
+                else if (toZone === 'exile') updates.exile = [...updates.exile, cardWithTaps];
+                else if (toZone === 'command') updates.commandZone = [...updates.commandZone, cardWithTaps];
+                else if (toZone === 'library_top') updates.library = [cardWithTaps, ...updates.library];
+                else if (toZone === 'library_bottom') updates.library = [...updates.library, cardWithTaps];
+                else if (toZone === 'library') {
+                    // Default to bottom for shuffling later, or draw if it's during mulligan/game start
+                    updates.library = [...updates.library, cardWithTaps];
+                }
+                
                 updateMyState(updates);
             };
 
-            const createToken = (tokenType) => {
-                const token = {
-                    id: 'token-' + Date.now(), instanceId: generateId(), name: tokenType.name, image_url: tokenType.image, type_line: tokenType.type, isTapped: false, isToken: true, counters: [],
-                    x: 260 + Math.random() * 50, y: 50 + Math.random() * 50
+            const toggleTap = (instanceId, battlefieldZone) => {
+                const zoneKey = battlefieldZone === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+                const currentCards = myState[zoneKey] || [];
+                const updatedCards = currentCards.map(c => 
+                    c.instanceId !== instanceId ? c : { ...c, isTapped: !c.isTapped }
+                );
+                updateMyState({ [zoneKey]: updatedCards });
+            };
+
+            const createToken = (tokenData) => {
+                 const newToken = { 
+                    instanceId: generateId(), 
+                    name: tokenData.name,
+                    type: tokenData.type,
+                    image_url: tokenData.image,
+                    isTapped: false,
+                    counters: [],
+                    x: 100, // default position
+                    y: 100
                 };
-                updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), token] });
+                updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), newToken] });
                 setTokenSelectorModalOpen(false);
             };
 
-            const createCustomToken = () => {
+            const handleCustomTokenCreate = () => {
                 const { name, power, toughness, colors, imageUrl } = customTokenData;
-                const activeColors = Object.keys(colors).filter(k => colors[k]);
-                
                 let finalImage = imageUrl;
-                
-                if (!finalImage) {
-                    let bgColorHex = 'cccccc'; let textColorHex = '000000';
-                    if (activeColors.length === 1) { const c = COLOR_DATA.find(cd => cd.id === activeColors[0]); if (c) { bgColorHex = c.hex.replace('#', ''); textColorHex = c.text.includes('white') ? 'ffffff' : '000000'; } } 
-                    else if (activeColors.length > 1) { bgColorHex = 'eab308'; textColorHex = '000000'; }
+
+                if (!imageUrl) {
+                    const selectedColors = COLOR_DATA.filter(c => colors[c.id]);
+                    const bgColor = selectedColors.length > 0 ? selectedColors[0].hex : '#4B5563'; // Default to a grey
+                    const textColor = selectedColors.length > 0 && selectedColors[0].text === 'text-yellow-900' ? '#1F2937' : '#FFFFFF';
+                    const bgColorHex = bgColor.substring(1);
+                    const textColorHex = textColor.substring(1);
+                    
                     const stats = power && toughness ? `${power}/${toughness}` : '';
                     const displayName = name || 'Token';
                     const text = `${displayName}\n${stats}`;
+                    
+                    // Using placehold.co for dynamic image generation
                     finalImage = `https://placehold.co/400x560/${bgColorHex}/${textColorHex}.png?text=${encodeURIComponent(text)}`;
                 }
 
-                createToken({ name: name || 'Token', type: 'Token', image: finalImage });
+                createToken({ 
+                    name: name || 'Token', 
+                    type: 'Token', 
+                    image: finalImage 
+                });
+
+                // Reset form
                 setCustomTokenData({ name: '', power: '1', toughness: '1', colors: { W:false, U:false, B:false, R:false, G:false }, imageUrl: '' });
             };
 
@@ -561,269 +532,714 @@
                 const updatedCards = currentCards.map(c => c.instanceId !== card.instanceId ? c : { ...c, counters: [...(c.counters || []), counterType] });
                 updateMyState({ [zoneKey]: updatedCards });
             };
-            const removeCounter = (card, index, battlefieldZone) => { const zoneKey = battlefieldZone === 'upper' ? 'battlefieldUpper' : 'battlefieldLower'; const currentCards = myState[zoneKey] || []; const updatedCards = currentCards.map(c => { if (c.instanceId !== card.instanceId) return c; const newCounters = [...(c.counters || [])]; newCounters.splice(index, 1); return { ...c, counters: newCounters }; }); updateMyState({ [zoneKey]: updatedCards }); };
-            const toggleTap = (id, battlefield) => { if (battlefield === 'upper') { const bf = (myState.battlefieldUpper || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldUpper: bf }); } else { const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldLower: bf }); } };
 
-            const handleLeaveGame = () => setLeaveGameModal(true);
-            const submitGameResult = async (winner) => { const roomRef = window.doc(window.getPublicRoomCollection(), roomId); await window.updateDoc(roomRef, { gameResult: { winner, submittedBy: user.uid, confirmed: false, timestamp: Date.now() } }); };
-            const confirmGameResult = async () => { const roomRef = window.doc(window.getPublicRoomCollection(), roomId); await window.updateDoc(roomRef, { 'gameResult.confirmed': true }); setLeaveGameModal(false); onLeave(); };
-            const handleDragStart = (e, card, fromZone) => setDraggedCard({ card, fromZone });
+            const removeCounter = (card, index, battlefieldZone) => {
+                const zoneKey = battlefieldZone === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+                const currentCards = myState[zoneKey] || [];
+                const updatedCards = currentCards.map(c => {
+                    if (c.instanceId !== card.instanceId) return c;
+                    const newCounters = [...(c.counters || [])];
+                    newCounters.splice(index, 1);
+                    return { ...c, counters: newCounters };
+                });
+                updateMyState({ [zoneKey]: updatedCards });
+            };
+
+            const passTurn = () => {
+                if (currentTurnId === user.uid) {
+                    const nextPlayerId = roomState.players.find(id => id !== user.uid);
+                    // Untap all permanent on the battlefield for the current player before passing the turn
+                    const untappedLower = (myState.battlefieldLower || []).map(c => ({ ...c, isTapped: false }));
+                    const untappedUpper = (myState.battlefieldUpper || []).map(c => ({ ...c, isTapped: false }));
+                    const untappedCmd = (myState.commandZone || []).map(c => ({ ...c, isTapped: false }));
+
+                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                        currentTurn: nextPlayerId,
+                        [`gameState.${user.uid}.battlefieldLower`]: untappedLower,
+                        [`gameState.${user.uid}.battlefieldUpper`]: untappedUpper,
+                        [`gameState.${user.uid}.commandZone`]: untappedCmd,
+                    });
+                }
+            };
             
-            const handleDropOnBattlefield = (e, targetBattlefield, battlefieldRef) => {
-                e.preventDefault(); if (!draggedCard) return;
-                const rect = battlefieldRef.current.getBoundingClientRect();
-                let x = e.clientX - rect.left - 45; let y = e.clientY - rect.top - 60;
-                if (targetBattlefield === 'lower' && x < 240) x = 240; 
-                if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
+            const submitGameResult = (winnerId) => {
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    gameResult: {
+                        winner: winnerId,
+                        submittedBy: user.uid,
+                        confirmed: false,
+                        submittedAt: Date.now()
+                    },
+                    // Also clear mulligan flags to prepare for a new game if desired
+                    showMulliganSummary: false,
+                    mulliganSummaryConfirmed: {}
+                });
+                setLeaveGameModal(false); 
+            };
+            
+            const confirmGameResult = () => {
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    'gameResult.confirmed': true,
+                }).then(() => {
+                    setLeaveGameModal(false);
+                    setGameResult({ winner: '', confirmed: true });
+                });
+            };
+            
+            const disputeGameResult = () => {
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    gameResult: null,
+                });
+                setLeaveGameModal(false);
+                setGameResult({ winner: '', confirmed: false });
+            };
+            
+            const confirmMulliganSummary = () => {
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    [`mulliganSummaryConfirmed.${user.uid}`]: true
+                });
+                setMulliganSummaryModal(false);
+            };
+
+            const handleDragStart = (e, card, fromZone) => {
+                setDraggedCard({ card, fromZone, initialX: e.clientX, initialY: e.clientY });
+                e.dataTransfer.setDragImage(new Image(), 0, 0); // Hide default drag image
+            };
+
+            const handleDropOnBattlefield = (e, targetBattlefield) => {
+                e.preventDefault();
+                if (!draggedCard) return;
+
+                const targetRef = targetBattlefield === 'upper' ? playerUpperBattlefieldRef : playerLowerBattlefieldRef;
+                const rect = targetRef.current.getBoundingClientRect();
+                
+                // Calculate position relative to the battlefield zone (not the whole screen)
+                let x = e.clientX - rect.left - 45; // 45 = half card width (90px)
+                let y = e.clientY - rect.top - 60; // 60 = half card height (120px)
+
+                // Clamp position within the bounds
+                x = Math.max(0, Math.min(rect.width - 90, x));
+                y = Math.max(0, Math.min(rect.height - 120, y));
+
+                const movedCard = { ...draggedCard.card, x, y, isTapped: false, counters: draggedCard.card.counters || [] };
+                
+                // Check if card is moving between battlefield zones
+                if (draggedCard.fromZone.startsWith('battlefield')) {
                     const updates = {};
-                    updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
-                    updates.battlefieldLower = (myState.battlefieldLower || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
-                    const movedCard = { ...draggedCard.card, x, y };
-                    if (targetBattlefield === 'upper') updates.battlefieldUpper = [...updates.battlefieldUpper, movedCard]; else updates.battlefieldLower = [...updates.battlefieldLower, movedCard];
-                    updateMyState(updates);
-                } else playCard(draggedCard.card, draggedCard.fromZone, targetBattlefield, { x, y });
+                    const otherZoneKey = targetBattlefield === 'upper' ? 'battlefieldLower' : 'battlefieldUpper';
+                    const targetZoneKey = targetBattlefield === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+
+                    if (draggedCard.fromZone === targetZoneKey) {
+                        // Moving within the same zone (just reposition)
+                        updates[targetZoneKey] = (myState[targetZoneKey] || []).map(c => 
+                            c.instanceId === movedCard.instanceId ? movedCard : c
+                        );
+                    } else if (draggedCard.fromZone === otherZoneKey) {
+                        // Moving from opponent's battlefield to mine (this should not happen in a strict two-player view, but for completeness)
+                        // In this setup, only my cards are draggable, so this case is for moving between my upper and lower zones.
+                        updates[otherZoneKey] = (myState[otherZoneKey] || []).filter(c => c.instanceId !== movedCard.instanceId);
+                        updates[targetZoneKey] = [...(myState[targetZoneKey] || []), movedCard];
+                    } else {
+                         // Repositioning a card from other zones (like hand/graveyard) which is handled by playCard/moveCardToZone
+                    }
+
+                    if (Object.keys(updates).length > 0) {
+                        updateMyState(updates);
+                    }
+                } else {
+                    // Playing a card from hand/command/etc.
+                    playCard(draggedCard.card, draggedCard.fromZone, targetBattlefield, { x, y });
+                }
+
                 setDraggedCard(null);
             };
-            const handleDropOnZone = (e, zone) => { e.preventDefault(); if (!draggedCard) return; const target = zone === 'library' ? 'library_top' : zone; if (draggedCard.fromZone === target) { setDraggedCard(null); return; } moveCardToZone(draggedCard.card, target); setDraggedCard(null); };
+
+            const handleDragEnd = (e) => {
+                if (!draggedCard) return;
+
+                const cardWidth = 90;
+                const cardHeight = 120;
+                const dragX = e.clientX;
+                const dragY = e.clientY;
+
+                // 1. Check drop on Battlefield (handles x, y positioning and zone change)
+                const lowerRect = playerLowerBattlefieldRef.current.getBoundingClientRect();
+                const upperRect = playerUpperBattlefieldRef.current.getBoundingClientRect();
+
+                if (dragX >= lowerRect.left && dragX <= lowerRect.right && dragY >= lowerRect.top && dragY <= lowerRect.bottom) {
+                    handleDropOnBattlefield(e, 'lower');
+                    setDraggedCard(null);
+                    return;
+                }
+                if (dragX >= upperRect.left && dragX <= upperRect.right && dragY >= upperRect.top && dragY <= upperRect.bottom) {
+                    handleDropOnBattlefield(e, 'upper');
+                    setDraggedCard(null);
+                    return;
+                }
+
+                // 2. Reposition within the same battlefield if released outside but was from battlefield
+                if (draggedCard.fromZone.startsWith('battlefield')) {
+                    const targetBattlefield = draggedCard.fromZone === 'battlefieldUpper' ? 'upper' : 'lower';
+                    const rect = targetBattlefield === 'upper' ? upperRect : lowerRect;
+
+                    let x = dragX - rect.left - (cardWidth / 2);
+                    let y = dragY - rect.top - (cardHeight / 2);
+
+                    x = Math.max(0, Math.min(rect.width - cardWidth, x));
+                    y = Math.max(0, Math.min(rect.height - cardHeight, y));
+
+                    const movedCard = { ...draggedCard.card, x, y };
+
+                    const zoneKey = draggedCard.fromZone;
+                    const updatedCards = (myState[zoneKey] || []).map(c => 
+                        c.instanceId === movedCard.instanceId ? movedCard : c
+                    );
+                    updateMyState({ [zoneKey]: updatedCards });
+                }
+                
+                setDraggedCard(null);
+            };
+
+
+            const handleDropOnZone = (e, zone) => {
+                e.preventDefault();
+                if (!draggedCard) return;
+                const target = zone === 'library' ? 'library_top' : zone;
+
+                // Check if card is moving to itself
+                if (draggedCard.fromZone === target || (draggedCard.fromZone === 'library_top' && target === 'library')) {
+                    setDraggedCard(null);
+                    return;
+                }
+
+                moveCardToZone(draggedCard.card, target);
+                setDraggedCard(null);
+            };
 
             const openCardContextMenu = (e, card, zone) => {
-                e.preventDefault(); e.stopPropagation();
-                const options = [
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const battlefieldZone = zone === 'battlefieldUpper' ? 'upper' : 'lower';
+
+                let options = [
                     { header: 'Card Actions' },
-                    { label: card.isTapped ? 'Untap' : 'Tap', action: () => toggleTap(card.instanceId, zone === 'battlefieldUpper' ? 'upper' : 'lower') },
+                    { label: card.isTapped ? 'Untap' : 'Tap', action: () => toggleTap(card.instanceId, battlefieldZone) },
                     { label: 'To Hand', action: () => moveCardToZone(card, 'hand') },
                     { label: 'To Graveyard', action: () => moveCardToZone(card, 'graveyard') },
                     { label: 'To Exile', action: () => moveCardToZone(card, 'exile') },
                     { label: 'To Command Zone', action: () => moveCardToZone(card, 'command') },
-                    { divider: true }, { header: 'Counters' }
+                    { divider: true },
+                    { header: 'Counters' }
                 ];
-                COUNTER_TYPES.forEach(ct => { options.push({ label: `Add ${ct.label}`, action: () => updateCardCounters(card, ct, zone === 'battlefieldUpper' ? 'upper' : 'lower'), rightIcon: <span className={`w-3 h-3 rounded-full ${ct.color} inline-block`}></span> }); });
-                if (card.counters && card.counters.length > 0) { options.push({ divider: true }); options.push({ label: 'Remove Last Counter', action: () => removeCounter(card, card.counters.length - 1, zone === 'battlefieldUpper' ? 'upper' : 'lower') }); options.push({ label: 'Clear All Counters', action: () => { const zKey = zone === 'battlefieldUpper' ? 'battlefieldUpper' : 'battlefieldLower'; const updated = myState[zKey].map(c => c.instanceId === card.instanceId ? {...c, counters: []} : c); updateMyState({ [zKey]: updated }); }}); }
+                
+                // Add counter options
+                COUNTER_TYPES.forEach(ct => {
+                    options.push({ 
+                        label: `Add ${ct.label}`, 
+                        action: () => updateCardCounters(card, ct, battlefieldZone), 
+                        rightIcon: '+'
+                    });
+                });
+
+                // Add remove counter options
+                if (card.counters && card.counters.length > 0) {
+                    options.push({ divider: true });
+                    options.push({ header: 'Remove Counter' });
+                    card.counters.forEach((c, index) => {
+                        options.push({
+                            label: `Remove ${c.label}`,
+                            action: () => removeCounter(card, index, battlefieldZone),
+                            rightIcon: '-'
+                        });
+                    });
+                }
+                
+                options.push({ divider: true });
+                options.push({ label: 'To Bottom of Library', action: () => moveCardToZone(card, 'library_bottom') });
+                options.push({ label: 'To Top of Library', action: () => moveCardToZone(card, 'library_top') });
+
+
                 setCardContextMenu({ x: e.clientX, y: e.clientY, options });
             };
 
+            const mulliganHand = () => {
+                const numCards = myState.hand.length;
+                if (numCards <= 0) return;
+
+                // Move current hand to library
+                const cardsToShuffle = myState.hand.map(c => ({...c, isTapped: false, x: undefined, y: undefined}));
+                const newLibrary = [...myState.library, ...cardsToShuffle];
+                
+                // Shuffle new library
+                for (let i = newLibrary.length - 1; i > 0; i--) { 
+                    const j = Math.floor(Math.random() * (i + 1)); 
+                    [newLibrary[i], newLibrary[j]] = [newLibrary[j], newLibrary[i]]; 
+                }
+
+                // Draw new hand (N-1)
+                const newHandSize = Math.max(0, numCards - 1);
+                const newHand = newLibrary.splice(0, newHandSize);
+                
+                updateMyState({ 
+                    hand: newHand, 
+                    library: newLibrary,
+                    // If the starting hand size was 7, this is the first mulligan, so keep the flag false.
+                    // Otherwise, set to true to disable further mulligans below 6 cards (optional)
+                    // The standard EDH rule is N-1 for first, then scry 1 for second. This simple logic just does N-1.
+                });
+
+                // Note: The UI "Keep Hand" button now needs to handle the phase switch to 'game'
+            };
+            
+            const keepHandAndStartGame = () => {
+                 // 1. Mark my mulligan as confirmed
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    [`mulliganSummaryConfirmed.${user.uid}`]: true
+                });
+                
+                // 2. Scry 1 if hand size is < 7 (simple rule, may need refinement)
+                // For simplicity, we just mark confirmed. The Scry logic can be implemented separately if needed.
+                
+                // 3. Check if all players are confirmed. If so, switch phase to 'game' and show summary.
+                // The main listener (useEffect at the top) handles the phase switch when all players confirm.
+            };
+
+            // Calculate space for battlefields
+            const handHeight = myHandMinimized ? 0 : 180;
+            const battlefieldHeight = `calc(100vh - 80px - ${handHeight}px - 200px)`; 
+            
+            // Render everything
             return (
-                <div className="h-full w-full relative bg-gray-900 overflow-hidden flex flex-col">
-                    
-                    {/* TOKEN SELECTOR MODAL (Replaces small popup) */}
-                    {tokenSelectorModalOpen && (
-                        <Modal isOpen={true} onClose={() => setTokenSelectorModalOpen(false)} title="Create Token">
-                            <div className="flex flex-col h-full">
-                                <div className="flex space-x-4 mb-4 border-b border-gray-700 pb-2">
-                                    <button onClick={() => setTokenTab('common')} className={`px-4 py-2 font-bold rounded ${tokenTab === 'common' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}>Common Tokens</button>
-                                    <button onClick={() => setTokenTab('custom')} className={`px-4 py-2 font-bold rounded ${tokenTab === 'custom' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>Custom Token</button>
-                                </div>
+                <div className="h-full w-full flex flex-col">
+                    <Header user={user} selectedDeck={deck} />
 
-                                {tokenTab === 'common' ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 overflow-y-auto">
-                                        {COMMON_TOKENS.map(token => (
-                                            <div key={token.name} onClick={() => createToken(token)} className="bg-gray-700 p-2 rounded cursor-pointer hover:bg-gray-600 hover:ring-2 hover:ring-purple-500 transition-all flex flex-col items-center">
-                                                <img src={token.image} className="w-full rounded mb-2 object-cover aspect-[5/7]" />
-                                                <span className="text-xs font-bold text-center">{token.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div><label className="block text-sm text-gray-400 mb-1">Name / Type</label><input type="text" value={customTokenData.name} onChange={e => setCustomTokenData({...customTokenData, name: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="e.g. Elf Warrior" /></div>
-                                        <div className="flex gap-4"><div className="flex-1"><label className="block text-sm text-gray-400 mb-1">Power</label><input type="text" value={customTokenData.power} onChange={e => setCustomTokenData({...customTokenData, power: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" /></div><div className="flex-1"><label className="block text-sm text-gray-400 mb-1">Toughness</label><input type="text" value={customTokenData.toughness} onChange={e => setCustomTokenData({...customTokenData, toughness: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" /></div></div>
-                                        <div><label className="block text-sm text-gray-400 mb-2">Colors (Background)</label><div className="flex justify-center gap-3">{COLOR_DATA.map(c => (<button key={c.id} onClick={() => setCustomTokenData({ ...customTokenData, colors: { ...customTokenData.colors, [c.id]: !customTokenData.colors[c.id] } })} className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${customTokenData.colors[c.id] ? 'border-white scale-110 shadow-lg' : 'border-gray-600 opacity-50'} ${c.bg}`} title={c.label}><span className={`font-bold ${c.text}`}>{c.id}</span></button>))}</div></div>
-                                        <div><label className="block text-sm text-gray-400 mb-1">Image URL (Optional)</label><input type="text" value={customTokenData.imageUrl} onChange={e => setCustomTokenData({...customTokenData, imageUrl: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="https://..." /></div>
-                                        <button onClick={createCustomToken} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded mt-4">Create Token</button>
-                                    </div>
-                                )}
+                    {/* Main Game Area */}
+                    <div className="flex-grow relative overflow-hidden" onDragOver={e => e.preventDefault()} onDragEnd={handleDragEnd} onDrop={handleDragEnd}>
+                        
+                        {/* --- OPPONENT ZONE --- */}
+                        <div ref={playerUpperBattlefieldRef} className="absolute top-0 left-0 right-0 h-[200px] bg-gray-900/50 border-b border-gray-700 p-2 overflow-hidden" onDrop={(e) => handleDropOnBattlefield(e, 'upper')} onDragOver={e => e.preventDefault()}>
+                            <div className="absolute inset-0 z-0 opacity-10 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/Commander_symbol.svg')] bg-center bg-no-repeat bg-contain"></div>
+                            <h3 className="text-gray-500 font-bold text-sm">Opponent Battlefield</h3>
+                            <div className="relative w-full h-full">
+                                {(opponentState?.battlefieldUpper || []).map(card => (<div key={card.instanceId} className="absolute" style={{ left: card.x, top: card.y }}><CardImage src={card.image_url} counters={card.counters} className={`w-[60px] h-[80px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} /></div>))}
+                                {(opponentState?.battlefieldLower || []).map(card => (<div key={card.instanceId} className="absolute" style={{ left: card.x, top: card.y }}><CardImage src={card.image_url} counters={card.counters} className={`w-[60px] h-[80px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} /></div>))}
                             </div>
-                        </Modal>
-                    )}
-
-                    {mulliganSummaryModal && (
-                        <Modal isOpen={true} onClose={confirmMulliganSummary} title="Mulligan Summary">
-                            <div className="space-y-4 text-center">
-                                <p className="text-gray-300">The game has started!</p>
-                                <div className="grid grid-cols-2 gap-4 bg-gray-700 p-4 rounded-lg">
-                                    <div className="flex flex-col">
-                                        <span className="text-blue-400 font-bold">You</span>
-                                        <span className="text-2xl text-white">{myState.mulliganCount || 0} Mulligans</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-red-400 font-bold">{opponentName}</span>
-                                        <span className="text-2xl text-white">{opponentState?.mulliganCount || 0} Mulligans</span>
-                                    </div>
-                                </div>
-                                <button onClick={confirmMulliganSummary} className="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded font-bold">OK</button>
-                            </div>
-                        </Modal>
-                    )}
-
-                    {leaveGameModal && (<Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Result">{!roomState?.gameResult?.submittedBy ? (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">Who won the game?</p><div className="flex gap-4"><button onClick={() => { submitGameResult(user.uid); }} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">I Won</button><button onClick={() => { submitGameResult(opponentId); }} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Opponent Won</button><button onClick={() => { submitGameResult('draw'); }} className="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded text-white font-bold">Draw</button></div></div>) : roomState.gameResult.submittedBy === user.uid ? (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">Waiting for opponent to confirm result...</p><div className="loader"></div></div>) : (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">{gameResult.winner === user.uid ? 'You won!' : gameResult.winner === opponentId ? `${opponentName} won!` : 'Game was a draw'}</p><p className="text-gray-400">Do you confirm this result?</p><div className="flex gap-4"><button onClick={confirmGameResult} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">Confirm</button><button onClick={() => setLeaveGameModal(false)} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Dispute</button></div></div>)}</Modal>)}
-
-                    {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
-                    {libraryMenu && <ContextMenu x={libraryMenu.x} y={libraryMenu.y} onClose={() => setLibraryMenu(null)} options={[ { label: 'Draw Card', action: drawCard }, { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } }, { label: 'Shuffle Library', action: shuffleLibrary }, { label: 'View Entire Library', action: () => setViewingZone('library') } ]} /> }
-                    {cardContextMenu && <ContextMenu x={cardContextMenu.x} y={cardContextMenu.y} onClose={() => setCardContextMenu(null)} options={cardContextMenu.options} />}
-                    {topCardView && <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library"><div className="flex flex-col items-center gap-4"><img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" /><div className="flex gap-4"><button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button><button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button><button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button></div></div></Modal>}
-                    {viewingZone && <Modal isOpen={true} onClose={() => setViewingZone(null)} title={`Viewing ${viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}`}><div className="grid grid-cols-4 gap-4">{myState[viewingZone]?.map((card, idx) => (<div key={idx} className="relative group"><img src={card.image_url} className="w-full rounded-lg shadow-lg" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity"><button onClick={() => { playCard(card, viewingZone, 'lower'); }} className="bg-green-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-green-500">Play</button>{viewingZone === 'library' && (<button onClick={() => { moveCardToZone(card, 'library_top'); setViewingZone(null); }} className="bg-yellow-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-yellow-500">Top</button>)}</div></div>))}</div></Modal>}
-
-                    {/* --- OPPONENT ZONE --- */}
-                    <div className="absolute top-0 left-0 w-full h-[33vh] bg-red-900/10 border-b-2 border-red-500/30 z-0">
-                         <div className="relative w-full h-full overflow-hidden">
-                            {opponentState?.battlefieldLower?.map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, bottom: card.y }}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                         </div>
-                    </div>
-                    {opponentState && (
-                        <>
-                            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50">
-                                {oppHandMinimized ? (<button onClick={() => setOppHandMinimized(false)} className="bg-red-900/90 backdrop-blur-sm px-4 py-1 rounded-b-lg border border-red-500/50 text-red-400 font-bold text-xs shadow-lg hover:bg-red-800 transition-colors">Maximize Hand</button>) : (<div className="bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 relative group shadow-xl"><button onClick={() => setOppHandMinimized(true)} className="absolute top-0 right-0 p-1 text-red-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button><div className="flex gap-2 items-center h-[16vh] overflow-x-auto scrollbar-hide"><span className="text-red-400 text-xs font-bold mr-2 flex-shrink-0">Opponent Hand ({opponentState.hand?.length || 0})</span>{Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (<CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((16vh - 8px) * 0.714)', height: 'calc(16vh - 8px)' }} />))}</div></div>)}
-                            </div>
-                            <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
-                                <div className={`pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${currentTurnId === opponentId ? 'active-turn-opp border-red-500' : 'border-red-500/50'}`}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h4 className="text-red-400 text-sm font-bold flex items-center gap-2">
-                                            {opponentName} {currentTurnId === opponentId && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">TURN</span>}
-                                        </h4>
-                                        {startingPlayerId === opponentId && <Coin />}
-                                    </div>
-                                    <div className="text-white text-sm space-y-1"><div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div><div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div></div>
-                                </div>
-                                {opponentState.commandZone?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4><div className="flex flex-wrap gap-2 content-start">{opponentState.commandZone.map(card => (<div key={card.instanceId} className="flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 border border-yellow-500 flex-shrink-0" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div></div>)}
-                            </div>
-                            <div className="absolute top-4 right-2 z-40 w-56 flex flex-col gap-2 pointer-events-none"><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">Library ({opponentState.library?.length || 0})</h4><CardImage isBack={true} className="w-16 h-20" /></div><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">GY ({opponentState.graveyard?.length || 0}) / Exile ({opponentState.exile?.length || 0})</h4><div className="flex gap-2">{opponentState.graveyard?.[0] ? <CardImage src={opponentState.graveyard[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}{opponentState.exile?.[0] ? <CardImage src={opponentState.exile[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div></div></div>
-                        </>
-                    )}
-
-                    {/* --- BATTLEFIELD UPPER --- */}
-                    <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
-                        {opponentState?.battlefieldUpper?.map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-10" style={{ left: card.x, top: 10 }}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                        <div ref={playerUpperBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
-                            {(myState.battlefieldUpper || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-20" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldUpper')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'upper')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
                         </div>
-                    </div>
 
-                    {/* --- BATTLEFIELD LOWER --- */}
-                    <div style={{ top: '66vh', bottom: 0 }} className="w-full absolute bg-blue-900/20 overflow-hidden">
-                        <div ref={playerLowerBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
-                            {(myState.battlefieldLower || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldLower')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'lower')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
+                        {/* --- MIDDLE BATTLEFIELD --- */}
+                        <div ref={playerLowerBattlefieldRef} className="absolute left-0 right-0 p-2 bg-gray-900/80 border-t border-gray-700" style={{ top: '200px', height: battlefieldHeight }} onDrop={(e) => handleDropOnBattlefield(e, 'lower')} onDragOver={e => e.preventDefault()}>
+                             <div className="absolute inset-0 z-0 opacity-10 bg-[url('https://upload.wikimedia.org/wikipedia/commons/e/ec/Commander_symbol.svg')] bg-center bg-no-repeat bg-contain"></div>
+                            <h3 className="text-yellow-400 font-bold text-sm">Your Battlefield</h3>
+                            <div className="relative w-full h-full">
+                                {/* Dropped Cards */}
+                                {(myState.battlefieldUpper || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldUpper')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'upper')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
+                                {(myState.battlefieldLower || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldLower')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'lower')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* --- PLAYER UI --- */}
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
-                        {isMyTurn && globalPhase === 'game' && (
-                            <button onClick={passTurn} className="mb-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg border-2 border-yellow-400 animate-bounce">
-                                Pass Turn
-                            </button>
-                        )}
-                        {myHandMinimized ? (
-                            <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">Maximize Hand</button>
-                        ) : (
-                            <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]" onDrop={(e) => handleDropOnZone(e, 'hand')} onDragOver={(e) => e.preventDefault()}>
-                                <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
-                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide">
-                                    <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">
-                                        {showPutToBottomUI ? `Lege ${cardsToBottomCount} zurück` : 'Hand'}
-                                    </span>
-                                    <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
-                                        {myState.hand.map(card => (
-                                            <div 
-                                                key={card.instanceId} 
-                                                draggable={!showPutToBottomUI} // Can't drag when putting to bottom
-                                                onDragStart={(e) => !showPutToBottomUI && handleDragStart(e, card, 'hand')} 
-                                                onClick={() => showPutToBottomUI && putCardToBottom(card)} // Click to put to bottom
-                                                className="cursor-pointer flex-shrink-0"
-                                            >
+                        {/* --- PLAYER UI --- */}
+                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
+                            {isMyTurn && phase === 'game' && (
+                                <button onClick={passTurn} className="mb-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg border-2 border-yellow-400 animate-bounce">
+                                    Pass Turn
+                                </button>
+                            )}
+                            {myHandMinimized ? (
+                                <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">Maximize Hand</button>
+                            ) : (
+                                <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 shadow-2xl transition-all duration-300">
+                                    <h3 className="text-blue-300 text-sm font-bold mb-2 flex justify-between items-center">
+                                        Your Hand ({myState.hand.length})
+                                        <button onClick={() => setMyHandMinimized(true)} className="text-blue-400 hover:text-white">
+                                             <i data-lucide="minimize-2" className="w-4 h-4"></i>
+                                        </button>
+                                    </h3>
+                                    <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide" style={{ width: 'min(90vw, 900px)' }}>
+                                        {myState.hand.map((card, index) => (
+                                            <div key={card.instanceId} className={`flex-shrink-0 cursor-grab ${draggedCard?.card?.instanceId === card.instanceId ? 'opacity-30' : ''}`} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} onContextMenu={(e) => openCardContextMenu(e, card, 'hand')}>
                                                 <CardImage 
                                                     src={card.image_url} 
-                                                    style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} 
-                                                    className={`hover:scale-110 hover:z-10 transition-transform ${showPutToBottomUI ? 'hover:ring-2 hover:ring-red-500' : ''}`} 
+                                                    className="w-[90px] h-[120px] card-shadow" 
                                                     onMouseEnter={() => setHoveredCard(card.image_url)} 
                                                     onMouseLeave={() => setHoveredCard(null)} 
                                                 />
                                             </div>
                                         ))}
                                     </div>
-                                    {showMulliganUI && (
-                                        <div className="absolute -top-3 right-8 flex gap-2">
-                                            <button 
-                                                onClick={keepHand} 
-                                                className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold px-3 py-1 rounded shadow-lg border border-green-400"
-                                            >
-                                                KEEP
+                                    {showMulligan && (
+                                        <div className="flex justify-center gap-4 mt-2 pt-2 border-t border-blue-800">
+                                            <button onClick={mulliganHand} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md">
+                                                Mulligan (Draw {Math.max(0, myState.hand.length - 1)})
                                             </button>
-                                            <button 
-                                                onClick={mulligan} 
-                                                className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" 
-                                                title={`Mulligan ${myState.mulliganCount + 1} (Draw 7)`}
-                                            >
-                                                MULLIGAN
+                                            <button onClick={keepHandAndStartGame} className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg shadow-md">
+                                                Keep Hand
                                             </button>
-                                        </div>
-                                    )}
-                                    {globalPhase === 'mulligan' && myState.playerReady && (
-                                        <div className="absolute -top-3 right-8 flex gap-2">
-                                            <span className="text-gray-400 text-xs font-bold px-3 py-1">Warte auf Gegner...</span>
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="absolute bottom-4 left-2 z-40 w-56 flex flex-col gap-2">
-                        {/* --- TOOLS MENU (Tokens & Dice) --- */}
-                        <div className="relative">
-                            <button onClick={() => setTokenSelectorModalOpen(true)} className="w-full bg-purple-900/80 hover:bg-purple-800/80 border border-purple-500/50 text-purple-200 font-bold py-2 rounded-lg shadow-lg flex items-center justify-center gap-2 backdrop-blur-sm"><i data-lucide="box" className="w-4 h-4"></i> Tools & Tokens</button>
-                            <div className="mt-2"><button onClick={() => alert("Roll D20: " + (Math.floor(Math.random() * 20) + 1))} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-1 rounded shadow">Roll D20</button></div>
+                            )}
                         </div>
-                        <div className={`bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${isMyTurn ? 'active-turn border-green-500' : 'border-blue-500/50'}`}>
-                            <div className="flex justify-between items-center mb-2">
-                                <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2">
-                                    You {isMyTurn && globalPhase === 'game' && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">YOUR TURN</span>}
+                        
+                        {/* --- PLAYER INFO AND UTILITIES (Left) --- */}
+                        <div className="absolute bottom-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
+                            <div className={`pointer-events-auto bg-green-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${currentTurnId === user.uid ? 'active-turn border-green-500' : 'border-green-500/50'}`}>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="text-green-400 text-sm font-bold flex items-center gap-2">
+                                         You {currentTurnId === user.uid && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">TURN</span>}
+                                    </h4>
+                                    {startingPlayerId === user.uid && <Coin />}
+                                </div>
+                                <div className="text-white text-sm space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <span>Life:</span>
+                                        <span className="text-green-400 font-bold text-lg">{myState.life}</span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button>
+                                        <button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-2">
+                                        <span>Cmd Dmg:</span>
+                                        <span className="text-red-400 font-bold">{myState.commanderDamage || 0}</span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => { 
+                                            const currentCmdDmg = myState.commanderDamage || 0; 
+                                            updateMyState({ commanderDamage: currentCmdDmg + 1, life: myState.life - 1 }); 
+                                        }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button>
+                                        <button onClick={() => { 
+                                            const currentCmdDmg = myState.commanderDamage || 0; 
+                                            if (currentCmdDmg > 0) updateMyState({ commanderDamage: currentCmdDmg - 1, life: myState.life + 1 }); 
+                                        }} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500" disabled={!(myState.commanderDamage > 0)}>-</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pointer-events-auto bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 shadow-lg">
+                                <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Utilities</h4>
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                    <button onClick={() => setTokenSelectorModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white py-1 px-2 rounded font-bold">Token</button>
+                                    <button onClick={() => setViewingZone('graveyard')} className="bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded font-bold">GY ({myState.graveyard.length})</button>
+                                    <button onClick={() => setViewingZone('exile')} className="bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded font-bold">Exile ({myState.exile.length})</button>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        {/* --- OPPONENT INFO AND COMMAND ZONE (Right-Top) --- */}
+                        <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
+                            <div className={`pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${currentTurnId === opponentId ? 'active-turn-opp border-red-500' : 'border-red-500/50'}`}>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="text-red-400 text-sm font-bold flex items-center gap-2">
+                                        {opponentName} {currentTurnId === opponentId && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">TURN</span>}
+                                    </h4>
+                                    {startingPlayerId === opponentId && <Coin />}
+                                </div>
+                                <div className="text-white text-sm space-y-1">
+                                    <div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div>
+                                    <div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div>
+                                </div>
+                            </div>
+
+                            {opponentState?.commandZone?.length > 0 && (
+                                <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg">
+                                    <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
+                                    <div className="flex flex-wrap gap-2 content-start">
+                                        {opponentState.commandZone.map(card => (
+                                            <div key={card.instanceId} className="relative">
+                                                <CardImage src={card.image_url} className={`w-[40px] h-[55px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* --- PLAYER COMMAND ZONE & LIBRARY (Right-Bottom) --- */}
+                        <div className="absolute bottom-4 right-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
+                             {myState.commandZone?.length > 0 && (
+                                <div className="pointer-events-auto bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 overflow-hidden flex flex-col shadow-lg">
+                                    <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone (Tax: +{myState.cmdTax || 0})</h4>
+                                    <div className="flex flex-wrap gap-2 content-start">
+                                        {myState.commandZone.map(card => (
+                                            <div key={card.instanceId} className="relative cursor-pointer" draggable onDragStart={(e) => handleDragStart(e, card, 'command')} onContextMenu={(e) => openCardContextMenu(e, card, 'command')}>
+                                                <CardImage 
+                                                    src={card.image_url} 
+                                                    className={`w-[40px] h-[55px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} 
+                                                    onClick={() => moveCardToZone(card, 'hand')} // Default action
+                                                    onMouseEnter={() => setHoveredCard(card.image_url)} 
+                                                    onMouseLeave={() => setHoveredCard(null)} 
+                                                />
+                                                <span className="absolute -top-1 -right-1 bg-yellow-600 text-black text-[8px] font-bold px-1 rounded-full shadow-md border border-black/20 z-10">{myState.cmdTax || 0}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pointer-events-auto bg-gray-900/80 backdrop-blur-sm p-3 rounded-lg border border-gray-700 shadow-lg flex justify-between items-center">
+                                <h4 className="text-gray-400 text-sm font-bold flex items-center gap-2">
+                                    Library ({myState.library.length})
                                 </h4>
-                                {startingPlayerId === user.uid && <Coin />}
+                                <button onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })} className="bg-gray-700 hover:bg-gray-600 text-white p-1 rounded-full text-xs">
+                                     <i data-lucide="menu" className="w-4 h-4"></i>
+                                </button>
                             </div>
-                            <div className="text-white text-sm space-y-1">
-                                <div className="flex items-center justify-between"><span>Life:</span><span className="text-green-400 font-bold text-lg">{myState.life}</span></div>
-                                <div className="flex gap-1"><button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button><button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button></div>
-                                <div className="flex items-center justify-between mt-2"><span>Cmd Dmg:</span><span className="text-red-400 font-bold">{myState.commanderDamage || 0}</span></div>
-                                <div className="flex gap-1"><button onClick={() => { const currentCmdDmg = myState.commanderDamage || 0; updateMyState({ commanderDamage: currentCmdDmg + 1, life: myState.life - 1 }); }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button><button onClick={() => { const currentCmdDmg = myState.commanderDamage || 0; if (currentCmdDmg > 0) updateMyState({ commanderDamage: currentCmdDmg - 1, life: myState.life + 1 }); }} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500" disabled={!(myState.commanderDamage > 0)}>-</button></div>
+
+                            <div className="pointer-events-auto bg-yellow-900/80 backdrop-blur-sm p-3 rounded-lg border border-yellow-500/50 shadow-lg flex justify-between items-center">
+                                <h4 className="text-yellow-400 text-sm font-bold flex items-center gap-2">
+                                    <i data-lucide="trophy" className="w-4 h-4"></i> Game Result
+                                </h4>
+                                <button onClick={() => setLeaveGameModal(true)} className="bg-yellow-600 hover:bg-yellow-500 text-white py-1 px-2 rounded text-xs font-bold">End Game</button>
                             </div>
                         </div>
-                        <div className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 overflow-hidden flex flex-col shadow-lg" onDrop={(e) => handleDropOnZone(e, 'command')} onDragOver={(e) => e.preventDefault()}>
-                            <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
-                            <div className="flex flex-wrap gap-2 content-start">{myState.commandZone.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'command')} className="cursor-pointer flex-shrink-0 flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 hover:scale-110 transition-transform border border-yellow-500" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} />{card.isCommander && (<div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>)}</div>))}</div>
-                        </div>
-                        <button onClick={handleLeaveGame} className="w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0 shadow-lg">Leave Game</button>
+
                     </div>
 
-                    <div className="absolute bottom-4 right-2 z-40 w-56 flex flex-col gap-2">
-                        <div className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center relative shadow-lg" onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })} onDrop={(e) => handleDropOnZone(e, 'library')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-sm font-bold mb-2">Library ({myState.library.length})</h4><CardImage isBack={true} className="w-20 h-28" /><div className="absolute inset-0 bg-blue-500/10 pointer-events-none rounded-lg border-2 border-transparent hover:border-blue-400/50"></div></div>
-                        <div className="flex gap-2"><div className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg" onClick={() => setViewingZone('graveyard')} onDrop={(e) => handleDropOnZone(e, 'graveyard')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-xs font-bold mb-1">GY ({myState.graveyard.length})</h4>{myState.graveyard[0] ? (<CardImage src={myState.graveyard[0].image_url} className="w-12 h-16" onMouseEnter={() => setHoveredCard(myState.graveyard[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div><div className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg" onClick={() => setViewingZone('exile')} onDrop={(e) => handleDropOnZone(e, 'exile')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-xs font-bold mb-1">Exile ({myState.exile.length})</h4>{myState.exile[0] ? (<CardImage src={myState.exile[0].image_url} className="w-12 h-16" onMouseEnter={() => setHoveredCard(myState.exile[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div></div>
-                        <div className="flex gap-2 flex-shrink-0"><button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button><button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button></div>
-                    </div>
+                    {/* Modals and Context Menus */}
+                    {viewingZone && (
+                        <Modal isOpen={!!viewingZone} onClose={() => setViewingZone(null)} title={viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}>
+                            <div className="grid grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-4 max-h-[70vh] overflow-y-auto p-2">
+                                {(myState[viewingZone] || []).map(card => (
+                                    <div key={card.instanceId} className="relative cursor-pointer" draggable onDragStart={(e) => handleDragStart(e, card, viewingZone)} onContextMenu={(e) => openCardContextMenu(e, card, viewingZone)}>
+                                        <CardImage 
+                                            src={card.image_url} 
+                                            className="w-full aspect-[5/7] rounded-xl shadow-lg" 
+                                            onMouseEnter={() => setHoveredCard(card.image_url)} 
+                                            onMouseLeave={() => setHoveredCard(null)} 
+                                            onClick={() => moveCardToZone(card, 'hand')}
+                                        />
+                                    </div>
+                                ))}
+                                {myState[viewingZone]?.length === 0 && <p className="text-gray-500 col-span-full">This zone is empty.</p>}
+                            </div>
+                        </Modal>
+                    )}
+
+                    {tokenSelectorModalOpen && (
+                        <Modal isOpen={true} onClose={() => setTokenSelectorModalOpen(false)} title="Create Token">
+                            <div className="flex border-b border-gray-700 mb-4">
+                                <button onClick={() => setTokenTab('common')} className={`px-4 py-2 font-bold ${tokenTab === 'common' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-400 hover:text-white'}`}>Common Tokens</button>
+                                <button onClick={() => setTokenTab('custom')} className={`px-4 py-2 font-bold ${tokenTab === 'custom' ? 'text-yellow-400 border-b-2 border-yellow-400' : 'text-gray-400 hover:text-white'}`}>Custom Token/Image</button>
+                            </div>
+
+                            {tokenTab === 'common' ? (
+                                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 max-h-[60vh] overflow-y-auto">
+                                    {COMMON_TOKENS.map(token => (
+                                        <div key={token.name} onClick={() => createToken(token)} className="cursor-pointer hover:bg-gray-700/50 p-2 rounded-lg transition-colors flex flex-col items-center">
+                                            <img src={token.image} className="w-full rounded mb-2 object-cover aspect-[5/7]" />
+                                            <span className="text-xs font-bold text-center">{token.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-1">Name / Type</label>
+                                        <input type="text" value={customTokenData.name} onChange={e => setCustomTokenData({...customTokenData, name: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="e.g. Elf Warrior" />
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <label className="block text-sm text-gray-400 mb-1">Power</label>
+                                            <input type="text" value={customTokenData.power} onChange={e => setCustomTokenData({...customTokenData, power: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-sm text-gray-400 mb-1">Toughness</label>
+                                            <input type="text" value={customTokenData.toughness} onChange={e => setCustomTokenData({...customTokenData, toughness: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-2">Colors (Background)</label>
+                                        <div className="flex justify-center gap-3">
+                                            {COLOR_DATA.map(c => (
+                                                <button key={c.id} onClick={() => setCustomTokenData({ ...customTokenData, colors: { ...customTokenData.colors, [c.id]: !customTokenData.colors[c.id] }})} className={`w-10 h-10 rounded-full border-2 ${customTokenData.colors[c.id] ? `border-white shadow-xl` : 'border-gray-500 opacity-50 hover:opacity-100'}`} style={{ backgroundColor: c.hex }} title={c.label}>
+                                                    <span className="sr-only">{c.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-1">Image URL (Optional, overrides Power/Toughness/Colors)</label>
+                                        <input type="url" value={customTokenData.imageUrl} onChange={e => setCustomTokenData({...customTokenData, imageUrl: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="e.g. https://scryfall.io/my-token.jpg" />
+                                    </div>
+                                    <button onClick={handleCustomTokenCreate} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 rounded mt-4">Create Custom Token</button>
+                                </div>
+                            )}
+                        </Modal>
+                    )}
+
+                    {mulliganSummaryModal && (
+                         <Modal isOpen={true} onClose={() => {}} title="Mulligan Confirmed">
+                            <div className="space-y-4">
+                                <p className="text-lg text-gray-300">Your opponent has confirmed their starting hand.</p>
+                                <p className="text-yellow-400 font-bold">Confirm your hand to start the game.</p>
+                                <div className="flex justify-center gap-4">
+                                    <button onClick={confirmMulliganSummary} className="bg-green-600 hover:bg-green-500 px-6 py-2 rounded text-white font-bold">Start Game</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+                    
+                    {leaveGameModal && (
+                        <Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Over">
+                            <div className="space-y-4">
+                                {gameResult.submittedBy === user.uid ? (
+                                    <p className="text-lg text-gray-300">Waiting for your opponent to confirm the result. Winner: <span className="text-yellow-400 font-bold">{gameResult.winner === user.uid ? 'You' : opponentName}</span></p>
+                                ) : (
+                                    <p className="text-lg text-gray-300">Your opponent submitted the result. Winner: <span className="text-yellow-400 font-bold">{gameResult.winner === user.uid ? 'You' : opponentName}</span></p>
+                                )}
+                                
+                                {gameResult.submittedBy !== user.uid && (
+                                    <div className="flex justify-center gap-4">
+                                        <button onClick={confirmGameResult} className="bg-green-600 hover:bg-green-500 px-6 py-2 rounded text-white font-bold">Confirm</button>
+                                        <button onClick={disputeGameResult} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded text-white font-bold">Dispute</button>
+                                    </div>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+                    
+                    {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
+                    
+                    {libraryMenu && <ContextMenu x={libraryMenu.x} y={libraryMenu.y} onClose={() => setLibraryMenu(null)} options={[
+                        { label: 'Draw Card', action: drawCard },
+                        { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } },
+                        { label: 'Shuffle Library', action: shuffleLibrary },
+                        { label: 'View Entire Library', action: () => setViewingZone('library') }
+                    ]} /> }
+                    
+                    {cardContextMenu && <ContextMenu x={cardContextMenu.x} y={cardContextMenu.y} onClose={() => setCardContextMenu(null)} options={cardContextMenu.options} />}
+                    
+                    {topCardView && <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library">
+                        <div className="flex flex-col items-center gap-4">
+                            <img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" />
+                            <div className="flex gap-4">
+                                <button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button>
+                                <button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button>
+                                <button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Draw and Play</button>
+                            </div>
+                        </div>
+                    </Modal>}
+
                 </div>
             );
         };
-        const RoomTimer = ({ emptyAt }) => { const [timeLeft, setTimeLeft] = useState(0); useEffect(() => { if (!emptyAt) return; const updateTimer = () => { const remaining = Math.max(0, emptyAt - Date.now()); setTimeLeft(remaining); }; updateTimer(); const interval = setInterval(updateTimer, 1000); return () => clearInterval(interval); }, [emptyAt]); if (!emptyAt) return null; const seconds = Math.floor(timeLeft / 1000); const minutes = Math.floor(seconds / 60); const remainingSeconds = seconds % 60; const isWarning = timeLeft < 60000; return <div className={`text-xs ${isWarning ? 'text-red-400 timer-warning' : 'text-gray-400'}`}>⏱️ {minutes}:{remainingSeconds.toString().padStart(2, '0')}</div>; };
-        const App = ({ user }) => {
-            const [view, setView] = useState('lobby'); const [selectedDeck, setSelectedDeck] = useState(null); const [decks, setDecks] = useState([]); const [rooms, setRooms] = useState([]); const [currentRoomId, setCurrentRoomId] = useState(null);
-            useEffect(() => { const loadDecks = async () => { const deckCollection = window.collection(window.db, 'users', user.uid, 'decks'); const snapshot = await window.getDocs(deckCollection); setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }; loadDecks(); const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => { setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }); const cleanupInterval = setInterval(async () => { const now = Date.now(); const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection()); roomsSnapshot.docs.forEach(async (docSnap) => { const data = docSnap.data(); if (data.emptyAt && data.emptyAt <= now) await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id)); }); }, 10000); return () => { unsubscribe(); clearInterval(cleanupInterval); }; }, []);
-            useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
-            const createRoom = async () => { 
-                if (!selectedDeck) { 
-                    alert("Select a deck first"); 
-                    return; 
-                } 
+        const RoomTimer = ({ emptyAt }) => {
+            const [timeLeft, setTimeLeft] = useState(0);
+            
+            useEffect(() => {
+                if (!emptyAt) return;
+
+                const updateTimer = () => {
+                    const remaining = Math.max(0, emptyAt - Date.now());
+                    setTimeLeft(remaining);
+                    if (remaining === 0) {
+                        clearInterval(interval);
+                    }
+                };
+
+                updateTimer();
+                const interval = setInterval(updateTimer, 1000);
+                return () => clearInterval(interval);
+            }, [emptyAt]);
+
+            if (!emptyAt) return null;
+
+            const seconds = Math.floor(timeLeft / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            
+            const isWarning = timeLeft < 60000;
+
+            return <div className={`text-xs ${isWarning ? 'text-red-400 timer-warning' : 'text-gray-400'}`}>⏱️ {minutes}:{remainingSeconds.toString().padStart(2, '0')}</div>;
+        };
+
+        const App = ({ user }) => {
+            const [view, setView] = useState('lobby');
+            const [selectedDeck, setSelectedDeck] = useState(null);
+            const [decks, setDecks] = useState([]);
+            const [rooms, setRooms] = useState([]);
+            const [currentRoomId, setCurrentRoomId] = useState(null);
+
+            // Load Decks
+            useEffect(() => {
+                const loadDecks = async () => {
+                    const deckCollection = window.collection(window.db, 'decks');
+                    const q = window.query(deckCollection, window.where('userId', '==', user.uid));
+                    const snapshot = await window.getDocs(q);
+                    const loadedDecks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setDecks(loadedDecks);
+                    
+                    // Auto-select first deck if none selected
+                    if (!selectedDeck && loadedDecks.length > 0) {
+                        setSelectedDeck(loadedDecks[0]);
+                    }
+                };
+                loadDecks();
+            }, [user]);
+
+            // Live Room Updates
+            useEffect(() => {
+                if (view !== 'lobby') return;
+                const publicRooms = window.getPublicRoomCollection();
+                const q = window.query(publicRooms, window.where('active', '==', true)); 
+
+                const unsubscribe = window.onSnapshot(q, (snapshot) => {
+                    const loadedRooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter(room => room.players.length < 2 || room.players.includes(user.uid)) // Only show rooms that are not full, or the one the user is in.
+                        .sort((a, b) => (a.emptyAt ? 1 : 0) - (b.emptyAt ? 1 : 0)); // Put closing rooms at the bottom
+
+                    setRooms(loadedRooms);
+
+                    // Check if the user is in a room that needs to transition to 'game'
+                    const userRoom = loadedRooms.find(r => r.players.includes(user.uid));
+                    if (userRoom && userRoom.phase === 'game') {
+                        setCurrentRoomId(userRoom.id);
+                        setView('game');
+                    }
+                    
+                    // Check for rooms where the other player left
+                    const myActiveRoom = loadedRooms.find(r => r.players.includes(user.uid) && r.players.length === 1 && !r.emptyAt);
+                    if (myActiveRoom && myActiveRoom.host === user.uid) {
+                         const emptyAt = Date.now() + ROOM_TIMEOUT_MS;
+                         window.updateDoc(window.doc(window.getPublicRoomCollection(), myActiveRoom.id), {
+                             emptyAt: emptyAt
+                         });
+                    }
+                });
+
+                return () => unsubscribe();
+            }, [user.uid, view]);
+
+            const createRoom = async () => {
+                if (!selectedDeck) {
+                    alert("Please select a deck first.");
+                    return;
+                }
+                const newRoomRef = window.doc(window.getPublicRoomCollection());
+                const newRoomId = newRoomRef.id;
+
                 try {
-                    const roomRef = await window.addDoc(window.getPublicRoomCollection(), { 
-                        host: user.uid, 
-                        hostName: user.displayName || user.email.split('@')[0], 
-                        players: [user.uid], 
-                        createdAt: Date.now(), 
-                        gameState: {}, 
-                        emptyAt: null, 
-                        playerDecks: { [user.uid]: selectedDeck } 
-                    }); 
-                    setCurrentRoomId(roomRef.id); 
+                    await window.setDoc(newRoomRef, {
+                        id: newRoomId,
+                        host: user.uid,
+                        hostName: user.displayName || user.email.split('@')[0],
+                        players: [user.uid],
+                        playerNames: { [user.uid]: user.displayName || user.email.split('@')[0] },
+                        playerDecks: { [user.uid]: selectedDeck },
+                        createdAt: window.Date.now(),
+                        active: true,
+                        phase: null,
+                        startingPlayer: null,
+                        currentTurn: null,
+                        gameState: {},
+                        gameResult: null,
+                        showMulliganSummary: false,
+                        mulliganSummaryConfirmed: {},
+                    });
+                    setCurrentRoomId(newRoomId);
                     setView('game');
                 } catch (error) {
                     console.error("Error creating room:", error);
@@ -831,72 +1247,159 @@
                 }
             };
             
-            const joinRoom = async (roomId) => { 
-                if (!selectedDeck) { 
-                    alert("Select a deck first"); 
-                    return; 
-                } 
-                
+            const joinRoom = async (roomId) => {
+                if (!selectedDeck) {
+                    alert("Please select a deck first.");
+                    return;
+                }
                 const room = rooms.find(r => r.id === roomId);
-                if (!room) {
-                    alert("Fehler: Raum nicht gefunden oder bereits voll. Bitte aktualisieren Sie die Seite.");
+                if (!room || room.players.length >= 2 || room.emptyAt) {
+                    alert("Der Raum wurde nicht gefunden oder bereits voll. Bitte aktualisieren Sie die Seite.");
                     return;
                 }
 
                 try {
-                    const roomRef = window.doc(window.getPublicRoomCollection(), roomId); 
-                    
+                    const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     await window.updateDoc(roomRef, { 
-                        players: [...room.players, user.uid],
-                        emptyAt: null, 
-                        [`playerDecks.${user.uid}`]: selectedDeck 
-                    }); 
-                    
-                    setCurrentRoomId(roomId); 
-                    setView('game'); 
+                        players: [...room.players, user.uid], 
+                        playerNames: { ...room.playerNames, [user.uid]: user.displayName || user.email.split('@')[0] },
+                        playerDecks: { ...room.playerDecks, [user.uid]: selectedDeck },
+                        emptyAt: null 
+                    });
+                    setCurrentRoomId(roomId);
+                    setView('game');
                 } catch (error) {
                     console.error("Error joining room:", error);
                     alert("Fehler beim Beitreten des Raums. Bitte versuchen Sie es erneut.");
                 }
             };
-            
-            const deleteRoom = async (roomId, e) => { e.stopPropagation(); if(!confirm("Delete room?")) return; await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId)); };
-            const clearMyRooms = async () => { if(!confirm("Close ALL your rooms?")) return; const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid)); const snapshot = await window.getDocs(q); snapshot.forEach(async (docSnap) => await window.deleteDoc(docSnap.ref)); };
-            const leaveGame = async () => { if (currentRoomId) { const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId); const roomSnap = await window.getDocs(window.query(window.getPublicRoomCollection(), window.where('__name__', '==', currentRoomId))); if (!roomSnap.empty) { const roomData = roomSnap.docs[0].data(); const remainingPlayers = roomData.players.filter(p => p !== user.uid); if (remainingPlayers.length === 0) await window.updateDoc(roomRef, { players: [], emptyAt: Date.now() + ROOM_TIMEOUT_MS }); else await window.updateDoc(roomRef, { players: remainingPlayers, emptyAt: null }); } } setView('lobby'); setCurrentRoomId(null); };
-            
-            if (view === 'game' && currentRoomId && selectedDeck) {
-                return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
-            }
-            if (view === 'game' && !selectedDeck) {
-                 return (
-                    <div className="h-screen flex flex-col bg-gray-900">
-                        <Header user={user} selectedDeck={null} />
-                        <div className="flex-grow p-8 overflow-y-auto flex flex-col items-center justify-center">
-                            <h2 className="text-2xl font-bold text-red-500 mb-4">Error: No Deck Selected</h2>
-                            <p className="text-gray-400 mb-6">Your session may have expired. Please return to the lobby.</p>
-                            <button onClick={leaveGame} className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-lg">
-                                Back to Lobby
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
 
+            const deleteRoom = async (roomId, e) => {
+                e.stopPropagation();
+                if(!confirm("Delete room?")) return;
+                await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId));
+            };
+            
+            const clearMyRooms = async () => {
+                if(!confirm("Close ALL your rooms?")) return;
+                const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid));
+                const snapshot = await window.getDocs(q);
+                snapshot.forEach(doc => {
+                    window.deleteDoc(window.doc(window.getPublicRoomCollection(), doc.id));
+                });
+            };
+
+            if (view === 'game' && currentRoomId && selectedDeck) {
+                return <GameSim deck={selectedDeck} onLeave={() => { setView('lobby'); setCurrentRoomId(null); }} roomId={currentRoomId} />;
+            }
+            
+            // LOBBY VIEW
             return (
-                <div className="h-screen flex flex-col bg-gray-900">
+                <div className="h-full flex flex-col">
                     <Header user={user} selectedDeck={selectedDeck} />
-                    <div className="flex-grow p-8 overflow-y-auto">
-                        <div className="max-w-6xl mx-auto">
-                            <div className="mb-6"><h2 className="text-3xl font-bold text-yellow-400 mb-4">Select Your Deck</h2><div className="grid grid-cols-1 md:grid-cols-3 gap-4">{decks.map(deck => (<div key={deck.id} onClick={() => setSelectedDeck(deck)} className={`p-4 rounded-lg cursor-pointer transition-all ${selectedDeck?.id === deck.id ? 'bg-yellow-600 border-2 border-yellow-400' : 'bg-gray-800 border border-gray-700 hover:border-yellow-500'}`}><h3 className="font-bold text-white">{deck.name}</h3><p className="text-sm text-gray-400">{deck.cards?.length || 0} cards</p></div>))}</div></div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div><h2 className="text-2xl font-bold text-yellow-400 mb-4">Create Room</h2><div className="flex flex-col gap-4"><button onClick={createRoom} disabled={!selectedDeck} className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg text-lg"><i data-lucide="plus-circle" className="w-6 h-6 inline-block mr-2"></i>Create New Room</button><button onClick={clearMyRooms} className="w-full bg-red-900/50 hover:bg-red-800/80 border border-red-700 text-red-200 py-3 px-6 rounded-lg text-sm transition-colors"><i data-lucide="trash-2" className="w-4 h-4 inline-block mr-2"></i>Clear My Rooms (Cleanup)</button></div></div>
-                                <div><h2 className="text-2xl font-bold text-yellow-400 mb-4">Available Rooms</h2><div className="space-y-2">{rooms.filter(r => r.players.length < 2).map(room => (<div key={room.id} className={`bg-gray-800 p-4 rounded-lg border ${room.emptyAt ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700'}`}><div className="flex justify-between items-center"><div><h3 className="font-bold text-white">{room.hostName}'s Room</h3>{room.emptyAt ? (<div className="flex items-center space-x-2 mt-1"><span className="text-red-400 text-sm font-bold">Closing:</span><RoomTimer emptyAt={room.emptyAt} /></div>) : (<p className="text-sm text-gray-400">{room.players.length}/2 players</p>)}</div>{room.host === user.uid ? (<button onClick={(e) => deleteRoom(room.id, e)} className="bg-red-600 hover:bg-red-500 text-white p-2 rounded" title="Delete my room"><i data-lucide="trash" className="w-5 h-5"></i></button>) : (<button onClick={() => joinRoom(room.id)} disabled={!selectedDeck || !!room.emptyAt} className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded">{room.emptyAt ? 'Closing' : 'Join'}</button>)}</div></div>))}{rooms.filter(r => r.players.length < 2).length === 0 && (<p className="text-gray-500 text-center py-8">No rooms available</p>)}</div></div>
+                    <div className="flex-grow overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+                        
+                        <h2 className="text-3xl font-bold text-white mb-6">Commander Arena Lobby</h2>
+
+                        {/* Deck Selection & Actions */}
+                        <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 mb-8">
+                            <h3 className="text-xl font-bold text-yellow-400 mb-4">Your Deck</h3>
+                            <div className="flex flex-col md:flex-row gap-6">
+                                <div className="flex-grow">
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Select Deck to Play With:</label>
+                                    <select 
+                                        value={selectedDeck?.id || ''} 
+                                        onChange={(e) => setSelectedDeck(decks.find(d => d.id === e.target.value))} 
+                                        className="w-full bg-gray-700 border border-gray-600 p-3 rounded text-white"
+                                    >
+                                        <option value="" disabled>-- Select your Commander Deck --</option>
+                                        {decks.map(deck => (
+                                            <option key={deck.id} value={deck.id}>{deck.name} ({deck.cards.length} cards)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col space-y-2 md:space-y-0 md:flex-row md:space-x-4 md:items-end">
+                                    <button 
+                                        onClick={() => window.location.href = 'builder.html'} 
+                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors flex items-center justify-center space-x-2"
+                                    >
+                                        <i data-lucide="edit" className="w-5 h-5"></i>
+                                        <span>Deck Builder</span>
+                                    </button>
+                                    <button 
+                                        onClick={createRoom} 
+                                        disabled={!selectedDeck}
+                                        className="bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors flex items-center justify-center space-x-2"
+                                    >
+                                        <i data-lucide="play" className="w-5 h-5"></i>
+                                        <span>Create New Game</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        {/* Room List */}
+                        <div className="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold text-yellow-400">Available Rooms</h2>
+                                <button onClick={clearMyRooms} className="bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded text-sm font-bold shadow-md">
+                                     Close My Rooms
+                                </button>
+                            </div>
+                            <div className="space-y-3">
+                                {rooms.filter(r => r.players.length < 2 || r.players.includes(user.uid)).map(room => (
+                                    <div key={room.id} className={`bg-gray-900/50 p-4 rounded-lg border flex justify-between items-center transition-all ${room.emptyAt ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700 hover:border-blue-500'}`}>
+                                        <div className="flex-grow">
+                                            <h3 className={`font-bold ${room.players.includes(user.uid) ? 'text-blue-400' : 'text-white'}`}>
+                                                {room.host === user.uid ? 'Your Room' : `${room.hostName}'s Room`}
+                                                {room.players.includes(user.uid) && <span className="text-xs text-blue-400 ml-2">(Joined)</span>}
+                                            </h3>
+                                            {room.emptyAt ? (
+                                                <div className="flex items-center space-x-2 mt-1">
+                                                    <span className="text-red-400 text-sm font-bold">Closing:</span>
+                                                    <RoomTimer emptyAt={room.emptyAt} />
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-400">{room.players.length}/2 players</p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            {room.host === user.uid ? (
+                                                <button onClick={(e) => deleteRoom(room.id, e)} className="bg-red-600 hover:bg-red-500 text-white p-2 rounded" title="Delete my room">
+                                                    <i data-lucide="trash" className="w-5 h-5"></i>
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => joinRoom(room.id)} 
+                                                    disabled={!selectedDeck || !!room.emptyAt || room.players.length >= 2} 
+                                                    className={`px-4 py-2 rounded text-white font-bold transition-colors ${!selectedDeck || !!room.emptyAt || room.players.length >= 2
+                                                        ? 'bg-gray-600 cursor-not-allowed'
+                                                        : 'bg-blue-600 hover:bg-blue-500'}`}
+                                                >
+                                                    Join Game
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                                {rooms.filter(r => r.players.length < 2).length === 0 && (
+                                    <p className="text-gray-500 text-center py-4">No open rooms available. Create a new one!</p>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="h-10"></div> {/* Spacer for bottom */}
                     </div>
                 </div>
             );
         };
+        
+        // Render lucide icons after React components are rendered
+        useEffect(() => {
+            window.lucide.createIcons();
+        }, []);
+
+
     </script>
 </body>
 </html>
