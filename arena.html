@@ -379,6 +379,13 @@
             const moveCardToZone = (card, toZone) => {
                 const filter = c => c.instanceId !== card.instanceId;
                 let updates = { battlefieldUpper: (myState.battlefieldUpper || []).filter(filter), battlefieldLower: (myState.battlefieldLower || []).filter(filter), hand: myState.hand.filter(filter), graveyard: myState.graveyard.filter(filter), exile: myState.exile.filter(filter), commandZone: myState.commandZone.filter(filter), library: myState.library.filter(filter) };
+                
+                // --- NEW TOKEN LOGIC: Tokens cease to exist when changing zones (unless moving battlefield->battlefield, which is handled in handleDropOnBattlefield) ---
+                if (card.isToken) {
+                    updateMyState(updates); // Remove from current zone, but don't add to new one.
+                    return;
+                }
+
                 const cleanCard = { ...card, isTapped: false, counters: [] };
                 if (toZone === 'graveyard') updates.graveyard = [cleanCard, ...updates.graveyard];
                 else if (toZone === 'exile') updates.exile = [cleanCard, ...updates.exile];
@@ -392,7 +399,7 @@
             const createToken = (tokenType) => {
                 const token = {
                     id: 'token-' + Date.now(), instanceId: generateId(), name: tokenType.name, image_url: tokenType.image, type_line: tokenType.type, isTapped: false, isToken: true, counters: [],
-                    x: 260 + Math.random() * 50, // CHANGED SPAWN POSITION to be right of sidebar
+                    x: 260 + Math.random() * 50, 
                     y: 50 + Math.random() * 50
                 };
                 updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), token] });
@@ -402,19 +409,15 @@
             const createCustomToken = () => {
                 const { name, power, toughness, colors } = customTokenData;
                 const activeColors = Object.keys(colors).filter(k => colors[k]);
-                
-                // Determine background color for placeholder
                 let bgColorHex = 'cccccc';
                 let textColorHex = '000000';
                 if (activeColors.length === 1) {
                     const c = COLOR_DATA.find(cd => cd.id === activeColors[0]);
                     if (c) { bgColorHex = c.hex.replace('#', ''); textColorHex = c.text.includes('white') ? 'ffffff' : '000000'; }
                 } else if (activeColors.length > 1) {
-                    bgColorHex = 'eab308'; // Gold for multicolor
+                    bgColorHex = 'eab308'; 
                     textColorHex = '000000';
                 }
-
-                // Generate Placeholder Image URL
                 const stats = power && toughness ? `${power}/${toughness}` : '';
                 const displayName = name || 'Token';
                 const text = `${displayName}\n${stats}`;
