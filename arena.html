@@ -41,11 +41,8 @@
         .coin-spin { animation: flip 1s ease-out; }
         @keyframes flip { 0% { transform: rotateY(0); } 100% { transform: rotateY(720deg); } }
         
-        @keyframes pulse-turn { 0%, 100% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.5); border-color: rgba(34, 197, 94, 0.8); } 50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); border-color: rgba(34, 197, 94, 1); } }
-        .active-turn { animation: pulse-turn 2s infinite; }
-
-        @keyframes pulse-turn-opp { 0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); border-color: rgba(239, 68, 68, 0.8); } 50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); border-color: rgba(239, 68, 68, 1); } }
-        .active-turn-opp { animation: pulse-turn-opp 2s infinite; }
+        @keyframes pulse-warning { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .timer-warning { animation: pulse-warning 1s ease-in-out infinite; }
 
         .counter-badge { text-shadow: 0 1px 2px rgba(0,0,0,0.8); box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
     </style>
@@ -291,7 +288,6 @@
             const [customTokenData, setCustomTokenData] = useState({ name: '', power: '1', toughness: '1', colors: { W:false, U:false, B:false, R:false, G:false } });
 
             const [leaveGameModal, setLeaveGameModal] = useState(false);
-            const [mulliganSummaryModal, setMulliganSummaryModal] = useState(false);
             const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
 
             const playerLowerBattlefieldRef = useRef(null);
@@ -310,36 +306,19 @@
                         const data = docSnap.data();
                         setRoomState(data);
                         setLoading(false);
-                        
-                        // Game Result Modal
                         if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
                             setGameResult(data.gameResult); setLeaveGameModal(true);
-                        }
-                        
-                        // Mulligan Summary Modal trigger
-                        if (data.showMulliganSummary && !data.mulliganSummaryConfirmed?.[user.uid]) {
-                            setMulliganSummaryModal(true);
                         }
                     } else { onLeave(); }
                 });
                 return () => unsubscribe();
             }, [roomId]);
 
-            // Host Init (Starting Player & Phase)
+            // Host Init
             useEffect(() => {
-                if (!loading && roomState && roomState.host === user.uid && roomState.players.length === 2) {
-                    const updates = {};
-                    if (!roomState.startingPlayer) {
-                        const starter = Math.random() < 0.5 ? roomState.players[0] : roomState.players[1];
-                        updates.startingPlayer = starter;
-                        updates.currentTurn = starter; // Turn starts with starter
-                    }
-                    if (!roomState.phase) {
-                        updates.phase = 'mulligan'; // Initial Phase
-                    }
-                    if (Object.keys(updates).length > 0) {
-                         window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), updates);
-                    }
+                if (!loading && roomState && roomState.host === user.uid && !roomState.startingPlayer && roomState.players.length === 2) {
+                    const starter = Math.random() < 0.5 ? roomState.players[0] : roomState.players[1];
+                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { startingPlayer: starter });
                 }
             }, [roomState, loading, user.uid, roomId]);
 
@@ -356,23 +335,20 @@
                 const startingHand = initLibrary.splice(0, 7);
                 const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: [] }] : [];
 
-                const initialPlayerState = { life: 40, commanderDamage: 0, cmdTax: 0, mulliganCount: 0, library: initLibrary, hand: startingHand, battlefieldUpper: [], battlefieldLower: [], graveyard: [], exile: [], commandZone: commander };
+                const initialPlayerState = { life: 40, commanderDamage: 0, cmdTax: 0, library: initLibrary, hand: startingHand, battlefieldUpper: [], battlefieldLower: [], graveyard: [], exile: [], commandZone: commander };
                 window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), { gameState: { [myId]: initialPlayerState } }, { merge: true })
                 .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
                 .catch(e => { initializingRef.current = false; });
             }, [roomState, deck, loading]);
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, toolsMenuOpen, customTokenModalOpen, mulliganSummaryModal]);
+            useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, toolsMenuOpen, customTokenModalOpen]);
 
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
+            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
-            const currentTurnId = roomState?.currentTurn;
-            const phase = roomState?.phase || 'mulligan';
-
-            // Is it my turn?
-            const isMyTurn = currentTurnId === user.uid;
+            const showMulligan = useMemo(() => { if (!myState) return false; return myState.library.length > (deck.cards.length - 7) && (!myState.battlefieldUpper?.length && !myState.battlefieldLower?.length && !myState.graveyard?.length); }, [myState, deck]);
 
             if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
 
@@ -381,52 +357,10 @@
                 window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), updatePayload);
             };
 
-            const drawCard = () => { 
-                if (myState.library.length === 0) return; 
-                
-                // MULLIGAN END LOGIC: If Starting Player draws for the first time
-                if (phase === 'mulligan' && user.uid === startingPlayerId) {
-                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
-                        phase: 'game',
-                        showMulliganSummary: true
-                    });
-                }
-                
-                const newLib = [...myState.library]; 
-                const card = newLib.shift(); 
-                updateMyState({ library: newLib, hand: [...myState.hand, card] }); 
-            };
-
+            const drawCard = () => { if (myState.library.length === 0) return; const newLib = [...myState.library]; const card = newLib.shift(); updateMyState({ library: newLib, hand: [...myState.hand, card] }); };
             const shuffleLibrary = () => { const newLib = [...myState.library]; for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } updateMyState({ library: newLib }); };
-            
-            const mulligan = () => { 
-                if (myState.hand.length === 0 && myState.library.length < 7) return; 
-                let newLib = [...myState.library, ...myState.hand]; 
-                for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } 
-                const newHand = newLib.splice(0, 7); 
-                updateMyState({ 
-                    library: newLib, 
-                    hand: newHand,
-                    mulliganCount: (myState.mulliganCount || 0) + 1
-                }); 
-            };
+            const mulligan = () => { if (myState.hand.length === 0 && myState.library.length < 7) return; let newLib = [...myState.library, ...myState.hand]; for (let i = newLib.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newLib[i], newLib[j]] = [newLib[j], newLib[i]]; } const newHand = newLib.splice(0, 7); updateMyState({ library: newLib, hand: newHand }); };
 
-            const passTurn = () => {
-                if (!isMyTurn) return;
-                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
-                    currentTurn: opponentId
-                });
-            };
-
-            const confirmMulliganSummary = () => {
-                const updateKey = `mulliganSummaryConfirmed.${user.uid}`;
-                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
-                    [updateKey]: true
-                });
-                setMulliganSummaryModal(false);
-            };
-
-            // GAME ACTIONS (Play, Move, Tokens, Counters)
             const playCard = (card, fromZone, targetBattlefield, coords = null) => {
                 let x = coords?.x, y = coords?.y;
                 if (x === undefined) { const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth; x = bfWidth - 360 - (Math.random() * 50); y = (playerLowerBattlefieldRef.current?.clientHeight || 300) / 2 - 60; }
@@ -445,7 +379,13 @@
             const moveCardToZone = (card, toZone) => {
                 const filter = c => c.instanceId !== card.instanceId;
                 let updates = { battlefieldUpper: (myState.battlefieldUpper || []).filter(filter), battlefieldLower: (myState.battlefieldLower || []).filter(filter), hand: myState.hand.filter(filter), graveyard: myState.graveyard.filter(filter), exile: myState.exile.filter(filter), commandZone: myState.commandZone.filter(filter), library: myState.library.filter(filter) };
-                if (card.isToken) { updateMyState(updates); return; }
+                
+                // --- NEW TOKEN LOGIC: Tokens cease to exist when changing zones (unless moving battlefield->battlefield, which is handled in handleDropOnBattlefield) ---
+                if (card.isToken) {
+                    updateMyState(updates); // Remove from current zone, but don't add to new one.
+                    return;
+                }
+
                 const cleanCard = { ...card, isTapped: false, counters: [] };
                 if (toZone === 'graveyard') updates.graveyard = [cleanCard, ...updates.graveyard];
                 else if (toZone === 'exile') updates.exile = [cleanCard, ...updates.exile];
@@ -459,7 +399,8 @@
             const createToken = (tokenType) => {
                 const token = {
                     id: 'token-' + Date.now(), instanceId: generateId(), name: tokenType.name, image_url: tokenType.image, type_line: tokenType.type, isTapped: false, isToken: true, counters: [],
-                    x: 260 + Math.random() * 50, y: 50 + Math.random() * 50
+                    x: 260 + Math.random() * 50, 
+                    y: 50 + Math.random() * 50
                 };
                 updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), token] });
                 setToolsMenuOpen(false);
@@ -468,15 +409,23 @@
             const createCustomToken = () => {
                 const { name, power, toughness, colors } = customTokenData;
                 const activeColors = Object.keys(colors).filter(k => colors[k]);
-                let bgColorHex = 'cccccc'; let textColorHex = '000000';
-                if (activeColors.length === 1) { const c = COLOR_DATA.find(cd => cd.id === activeColors[0]); if (c) { bgColorHex = c.hex.replace('#', ''); textColorHex = c.text.includes('white') ? 'ffffff' : '000000'; } } 
-                else if (activeColors.length > 1) { bgColorHex = 'eab308'; textColorHex = '000000'; }
+                let bgColorHex = 'cccccc';
+                let textColorHex = '000000';
+                if (activeColors.length === 1) {
+                    const c = COLOR_DATA.find(cd => cd.id === activeColors[0]);
+                    if (c) { bgColorHex = c.hex.replace('#', ''); textColorHex = c.text.includes('white') ? 'ffffff' : '000000'; }
+                } else if (activeColors.length > 1) {
+                    bgColorHex = 'eab308'; 
+                    textColorHex = '000000';
+                }
                 const stats = power && toughness ? `${power}/${toughness}` : '';
                 const displayName = name || 'Token';
                 const text = `${displayName}\n${stats}`;
                 const imageUrl = `https://placehold.co/400x560/${bgColorHex}/${textColorHex}.png?text=${encodeURIComponent(text)}`;
+
                 createToken({ name: displayName, type: 'Token', image: imageUrl });
-                setCustomTokenModalOpen(false); setCustomTokenData({ name: '', power: '1', toughness: '1', colors: { W:false, U:false, B:false, R:false, G:false } });
+                setCustomTokenModalOpen(false);
+                setCustomTokenData({ name: '', power: '1', toughness: '1', colors: { W:false, U:false, B:false, R:false, G:false } });
             };
 
             const updateCardCounters = (card, counterType, battlefieldZone) => {
@@ -485,8 +434,18 @@
                 const updatedCards = currentCards.map(c => c.instanceId !== card.instanceId ? c : { ...c, counters: [...(c.counters || []), counterType] });
                 updateMyState({ [zoneKey]: updatedCards });
             };
-            const removeCounter = (card, index, battlefieldZone) => { const zoneKey = battlefieldZone === 'upper' ? 'battlefieldUpper' : 'battlefieldLower'; const currentCards = myState[zoneKey] || []; const updatedCards = currentCards.map(c => { if (c.instanceId !== card.instanceId) return c; const newCounters = [...(c.counters || [])]; newCounters.splice(index, 1); return { ...c, counters: newCounters }; }); updateMyState({ [zoneKey]: updatedCards }); };
-            const toggleTap = (id, battlefield) => { if (battlefield === 'upper') { const bf = (myState.battlefieldUpper || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldUpper: bf }); } else { const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldLower: bf }); } };
+
+            const removeCounter = (card, index, battlefieldZone) => {
+                const zoneKey = battlefieldZone === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+                const currentCards = myState[zoneKey] || [];
+                const updatedCards = currentCards.map(c => { if (c.instanceId !== card.instanceId) return c; const newCounters = [...(c.counters || [])]; newCounters.splice(index, 1); return { ...c, counters: newCounters }; });
+                updateMyState({ [zoneKey]: updatedCards });
+            };
+
+            const toggleTap = (id, battlefield) => {
+                if (battlefield === 'upper') { const bf = (myState.battlefieldUpper || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldUpper: bf }); }
+                else { const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c); updateMyState({ battlefieldLower: bf }); }
+            };
 
             const handleLeaveGame = () => setLeaveGameModal(true);
             const submitGameResult = async (winner) => { const roomRef = window.doc(window.getPublicRoomCollection(), roomId); await window.updateDoc(roomRef, { gameResult: { winner, submittedBy: user.uid, confirmed: false, timestamp: Date.now() } }); };
@@ -497,7 +456,8 @@
                 e.preventDefault(); if (!draggedCard) return;
                 const rect = battlefieldRef.current.getBoundingClientRect();
                 let x = e.clientX - rect.left - 45; let y = e.clientY - rect.top - 60;
-                if (targetBattlefield === 'lower' && x < 240) x = 240; 
+                if (targetBattlefield === 'lower' && x < 240) x = 240; // Prevent drop under sidebar
+
                 if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
                     const updates = {};
                     updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
@@ -533,34 +493,39 @@
                     {customTokenModalOpen && (
                         <Modal isOpen={true} onClose={() => setCustomTokenModalOpen(false)} title="Create Custom Token">
                             <div className="space-y-4">
-                                <div><label className="block text-sm text-gray-400 mb-1">Name / Type</label><input type="text" value={customTokenData.name} onChange={e => setCustomTokenData({...customTokenData, name: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="e.g. Elf Warrior" /></div>
-                                <div className="flex gap-4"><div className="flex-1"><label className="block text-sm text-gray-400 mb-1">Power</label><input type="text" value={customTokenData.power} onChange={e => setCustomTokenData({...customTokenData, power: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" /></div><div className="flex-1"><label className="block text-sm text-gray-400 mb-1">Toughness</label><input type="text" value={customTokenData.toughness} onChange={e => setCustomTokenData({...customTokenData, toughness: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" /></div></div>
-                                <div><label className="block text-sm text-gray-400 mb-2">Colors</label><div className="flex justify-center gap-3">{COLOR_DATA.map(c => (<button key={c.id} onClick={() => setCustomTokenData({ ...customTokenData, colors: { ...customTokenData.colors, [c.id]: !customTokenData.colors[c.id] } })} className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${customTokenData.colors[c.id] ? 'border-white scale-110 shadow-lg' : 'border-gray-600 opacity-50'} ${c.bg}`} title={c.label}><span className={`font-bold ${c.text}`}>{c.id}</span></button>))}</div></div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Name / Type</label>
+                                    <input type="text" value={customTokenData.name} onChange={e => setCustomTokenData({...customTokenData, name: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" placeholder="e.g. Elf Warrior" />
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="block text-sm text-gray-400 mb-1">Power</label>
+                                        <input type="text" value={customTokenData.power} onChange={e => setCustomTokenData({...customTokenData, power: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-sm text-gray-400 mb-1">Toughness</label>
+                                        <input type="text" value={customTokenData.toughness} onChange={e => setCustomTokenData({...customTokenData, toughness: e.target.value})} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-center" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Colors</label>
+                                    <div className="flex justify-center gap-3">
+                                        {COLOR_DATA.map(c => (
+                                            <button 
+                                                key={c.id} 
+                                                onClick={() => setCustomTokenData({ ...customTokenData, colors: { ...customTokenData.colors, [c.id]: !customTokenData.colors[c.id] } })}
+                                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${customTokenData.colors[c.id] ? 'border-white scale-110 shadow-lg' : 'border-gray-600 opacity-50'} ${c.bg}`}
+                                                title={c.label}
+                                            >
+                                                <span className={`font-bold ${c.text}`}>{c.id}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                                 <button onClick={createCustomToken} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded mt-4">Create Token</button>
                             </div>
                         </Modal>
                     )}
-
-                    {mulliganSummaryModal && (
-                        <Modal isOpen={true} onClose={confirmMulliganSummary} title="Mulligan Summary">
-                            <div className="space-y-4 text-center">
-                                <p className="text-gray-300">The game has started!</p>
-                                <div className="grid grid-cols-2 gap-4 bg-gray-700 p-4 rounded-lg">
-                                    <div className="flex flex-col">
-                                        <span className="text-blue-400 font-bold">You</span>
-                                        <span className="text-2xl text-white">{myState.mulliganCount || 0} Mulligans</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-red-400 font-bold">{opponentName}</span>
-                                        <span className="text-2xl text-white">{opponentState?.mulliganCount || 0} Mulligans</span>
-                                    </div>
-                                </div>
-                                <button onClick={confirmMulliganSummary} className="bg-yellow-600 hover:bg-yellow-500 text-white px-6 py-2 rounded font-bold">OK</button>
-                            </div>
-                        </Modal>
-                    )}
-
-                    {leaveGameModal && (<Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Result">{!roomState?.gameResult?.submittedBy ? (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">Who won the game?</p><div className="flex gap-4"><button onClick={() => { submitGameResult(user.uid); }} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">I Won</button><button onClick={() => { submitGameResult(opponentId); }} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Opponent Won</button><button onClick={() => { submitGameResult('draw'); }} className="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded text-white font-bold">Draw</button></div></div>) : roomState.gameResult.submittedBy === user.uid ? (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">Waiting for opponent to confirm result...</p><div className="loader"></div></div>) : (<div className="flex flex-col items-center gap-4"><p className="text-white text-lg">{gameResult.winner === user.uid ? 'You won!' : gameResult.winner === opponentId ? `${opponentName} won!` : 'Game was a draw'}</p><p className="text-gray-400">Do you confirm this result?</p><div className="flex gap-4"><button onClick={confirmGameResult} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">Confirm</button><button onClick={() => setLeaveGameModal(false)} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Dispute</button></div></div>)}</Modal>)}
 
                     {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
                     {libraryMenu && <ContextMenu x={libraryMenu.x} y={libraryMenu.y} onClose={() => setLibraryMenu(null)} options={[ { label: 'Draw Card', action: drawCard }, { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } }, { label: 'Shuffle Library', action: shuffleLibrary }, { label: 'View Entire Library', action: () => setViewingZone('library') } ]} /> }
@@ -580,15 +545,7 @@
                                 {oppHandMinimized ? (<button onClick={() => setOppHandMinimized(false)} className="bg-red-900/90 backdrop-blur-sm px-4 py-1 rounded-b-lg border border-red-500/50 text-red-400 font-bold text-xs shadow-lg hover:bg-red-800 transition-colors">Maximize Hand</button>) : (<div className="bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 relative group shadow-xl"><button onClick={() => setOppHandMinimized(true)} className="absolute top-0 right-0 p-1 text-red-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button><div className="flex gap-2 items-center h-[16vh] overflow-x-auto scrollbar-hide"><span className="text-red-400 text-xs font-bold mr-2 flex-shrink-0">Opponent Hand ({opponentState.hand?.length || 0})</span>{Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (<CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((16vh - 8px) * 0.714)', height: 'calc(16vh - 8px)' }} />))}</div></div>)}
                             </div>
                             <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
-                                <div className={`pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${currentTurnId === opponentId ? 'active-turn-opp border-red-500' : 'border-red-500/50'}`}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h4 className="text-red-400 text-sm font-bold flex items-center gap-2">
-                                            {opponentName} {currentTurnId === opponentId && <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">TURN</span>}
-                                        </h4>
-                                        {startingPlayerId === opponentId && <Coin />}
-                                    </div>
-                                    <div className="text-white text-sm space-y-1"><div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div><div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div></div>
-                                </div>
+                                <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg"><div className="flex justify-between items-center mb-2"><h4 className="text-red-400 text-sm font-bold">Opponent</h4>{startingPlayerId === opponentId && <Coin />}</div><div className="text-white text-sm space-y-1"><div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div><div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div></div></div>
                                 {opponentState.commandZone?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4><div className="flex flex-wrap gap-2 content-start">{opponentState.commandZone.map(card => (<div key={card.instanceId} className="flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 border border-yellow-500 flex-shrink-0" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div></div>)}
                             </div>
                             <div className="absolute top-4 right-2 z-40 w-56 flex flex-col gap-2 pointer-events-none"><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">Library ({opponentState.library?.length || 0})</h4><CardImage isBack={true} className="w-16 h-20" /></div><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">GY ({opponentState.graveyard?.length || 0}) / Exile ({opponentState.exile?.length || 0})</h4><div className="flex gap-2">{opponentState.graveyard?.[0] ? <CardImage src={opponentState.graveyard[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}{opponentState.exile?.[0] ? <CardImage src={opponentState.exile[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div></div></div>
@@ -611,18 +568,13 @@
                     </div>
 
                     {/* --- PLAYER UI --- */}
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
-                        {isMyTurn && (
-                            <button onClick={passTurn} className="mb-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg border-2 border-yellow-400 animate-bounce">
-                                Pass Turn
-                            </button>
-                        )}
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50">
                         {myHandMinimized ? (
                             <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">Maximize Hand</button>
                         ) : (
                             <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]" onDrop={(e) => handleDropOnZone(e, 'hand')} onDragOver={(e) => e.preventDefault()}>
                                 <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
-                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide"><span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span><div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">{myState.hand.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} className="cursor-pointer flex-shrink-0"><CardImage src={card.image_url} style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} className="hover:scale-110 hover:z-10 transition-transform" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>{phase === 'mulligan' && showMulligan && (<div className="absolute -top-3 right-8"><button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button></div>)}</div>
+                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide"><span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span><div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">{myState.hand.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} className="cursor-pointer flex-shrink-0"><CardImage src={card.image_url} style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} className="hover:scale-110 hover:z-10 transition-transform" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>{showMulligan && (<div className="absolute -top-3 right-8"><button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button></div>)}</div>
                             </div>
                         )}
                     </div>
@@ -642,13 +594,8 @@
                                 </div>
                             )}
                         </div>
-                        <div className={`bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border flex-shrink-0 shadow-lg transition-all duration-500 ${isMyTurn ? 'active-turn border-green-500' : 'border-blue-500/50'}`}>
-                            <div className="flex justify-between items-center mb-2">
-                                <h4 className="text-blue-400 text-sm font-bold flex items-center gap-2">
-                                    You {isMyTurn && <span className="bg-green-600 text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">YOUR TURN</span>}
-                                </h4>
-                                {startingPlayerId === user.uid && <Coin />}
-                            </div>
+                        <div className="bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border border-blue-500/50 flex-shrink-0 shadow-lg">
+                            <div className="flex justify-between items-center mb-2"><h4 className="text-blue-400 text-sm font-bold">You</h4>{startingPlayerId === user.uid && <Coin />}</div>
                             <div className="text-white text-sm space-y-1">
                                 <div className="flex items-center justify-between"><span>Life:</span><span className="text-green-400 font-bold text-lg">{myState.life}</span></div>
                                 <div className="flex gap-1"><button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button><button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button></div>
