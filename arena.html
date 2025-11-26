@@ -120,7 +120,23 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
         const generateId = () => Math.random().toString(36).substring(2, 9);
-        const ROOM_TIMEOUT_MS = 180000; 
+        const ROOM_TIMEOUT_MS = 180000;
+        
+        // Strip card data to only essential fields for game simulation
+        const sanitizeCard = (card) => ({
+            id: card.id,
+            instanceId: card.instanceId || generateId(),
+            name: card.name || 'Unknown',
+            image_url: card.image_url || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || '',
+            type_line: card.type_line || '',
+            power: card.power,
+            toughness: card.toughness,
+            cmc: card.cmc,
+            isTapped: card.isTapped || false,
+            counters: card.counters || [],
+            isCommander: card.isCommander || false,
+            isToken: card.isToken || false
+        });
 
         // --- CONSTANTS ---
         const COMMON_TOKENS = [
@@ -270,7 +286,6 @@
                 <span className="text-yellow-900 font-bold text-xs">1</span>
             </div>
         );
-
         const GameSim = ({ deck, onLeave, roomId }) => {
             const [roomState, setRoomState] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -322,7 +337,7 @@
                 }
             }, [roomState, loading, user.uid, roomId]);
 
-            // Player Init (DEAD SYNC FIXED VERSION)
+            // Player Init (DEAD SYNC FIXED VERSION + SANITIZED DATA)
             useEffect(() => {
                 if (loading || !roomState) return;
                 const myId = user.uid;
@@ -338,17 +353,8 @@
                 initializingRef.current = true;
                 
                 try {
-                    // Safe Deck Mapping to avoid undefined values
-                    const initLibrary = deck.cards.map(c => ({ 
-                        ...c, 
-                        instanceId: generateId(), 
-                        isTapped: false, 
-                        counters: [],
-                        // Fallbacks for optional fields
-                        image_url: c.image_url || '',
-                        name: c.name || 'Unknown',
-                        type_line: c.type_line || ''
-                    }));
+                    // SANITIZE: Strip down to essential fields only
+                    const initLibrary = deck.cards.map(c => sanitizeCard(c));
                     
                     // Shuffle
                     for (let i = initLibrary.length - 1; i > 0; i--) { 
@@ -357,15 +363,10 @@
                     }
                     
                     const startingHand = initLibrary.splice(0, 7);
-                    const commander = deck.commander ? [{ 
+                    const commander = deck.commander ? [sanitizeCard({ 
                         ...deck.commander, 
-                        instanceId: generateId(), 
-                        isTapped: false, 
-                        isCommander: true, 
-                        counters: [],
-                        image_url: deck.commander.image_url || '',
-                        name: deck.commander.name || 'Commander'
-                    }] : [];
+                        isCommander: true 
+                    })] : [];
 
                     const initialPlayerState = { 
                         life: 40, 
@@ -380,15 +381,11 @@
                         commandZone: commander 
                     };
 
-                    // Deep Sanitize: Remove any remaining undefined values
-                    // This is crucial for Firebase set/update
-                    const safeState = JSON.parse(JSON.stringify(initialPlayerState));
-
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     
                     // Use dot-notation update to avoid overwriting other players
                     window.updateDoc(roomRef, {
-                        [`gameState.${myId}`]: safeState
+                        [`gameState.${myId}`]: initialPlayerState
                     })
                     .then(() => { 
                         hasInitializedRef.current = true; 
@@ -397,7 +394,7 @@
                     .catch(e => { 
                         console.warn("UpdateDoc failed, trying setDoc merge...", e);
                         // Fallback: If map doesn't exist yet, merge it
-                        window.setDoc(roomRef, { gameState: { [myId]: safeState } }, { merge: true })
+                        window.setDoc(roomRef, { gameState: { [myId]: initialPlayerState } }, { merge: true })
                         .then(() => {
                              hasInitializedRef.current = true; 
                              initializingRef.current = false;
@@ -600,102 +597,60 @@
                     {cardContextMenu && <ContextMenu x={cardContextMenu.x} y={cardContextMenu.y} onClose={() => setCardContextMenu(null)} options={cardContextMenu.options} />}
                     {topCardView && <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library"><div className="flex flex-col items-center gap-4"><img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" /><div className="flex gap-4"><button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button><button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button><button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button></div></div></Modal>}
                     {viewingZone && <Modal isOpen={true} onClose={() => setViewingZone(null)} title={`Viewing ${viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}`}><div className="grid grid-cols-4 gap-4">{myState[viewingZone]?.map((card, idx) => (<div key={idx} className="relative group"><img src={card.image_url} className="w-full rounded-lg shadow-lg" /><div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity"><button onClick={() => { playCard(card, viewingZone, 'lower'); }} className="bg-green-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-green-500">Play</button>{viewingZone === 'library' && (<button onClick={() => { moveCardToZone(card, 'library_top'); setViewingZone(null); }} className="bg-yellow-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-yellow-500">Top</button>)}</div></div>))}</div></Modal>}
-
-                    {/* --- OPPONENT ZONE --- */}
-                    <div className="absolute top-0 left-0 w-full h-[33vh] bg-red-900/10 border-b-2 border-red-500/30 z-0">
-                         <div className="relative w-full h-full overflow-hidden">
-                            {opponentState?.battlefieldLower?.map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, bottom: card.y }}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                         </div>
-                    </div>
-                    {opponentState && (
-                        <>
-                            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50">
-                                {oppHandMinimized ? (<button onClick={() => setOppHandMinimized(false)} className="bg-red-900/90 backdrop-blur-sm px-4 py-1 rounded-b-lg border border-red-500/50 text-red-400 font-bold text-xs shadow-lg hover:bg-red-800 transition-colors">Maximize Hand</button>) : (<div className="bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 relative group shadow-xl"><button onClick={() => setOppHandMinimized(true)} className="absolute top-0 right-0 p-1 text-red-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button><div className="flex gap-2 items-center h-[16vh] overflow-x-auto scrollbar-hide"><span className="text-red-400 text-xs font-bold mr-2 flex-shrink-0">Opponent Hand ({opponentState.hand?.length || 0})</span>{Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (<CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((16vh - 8px) * 0.714)', height: 'calc(16vh - 8px)' }} />))}</div></div>)}
-                            </div>
-                            <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
-                                <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg"><div className="flex justify-between items-center mb-2"><h4 className="text-red-400 text-sm font-bold">Opponent</h4>{startingPlayerId === opponentId && <Coin />}</div><div className="text-white text-sm space-y-1"><div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div><div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div></div></div>
-                                {opponentState.commandZone?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4><div className="flex flex-wrap gap-2 content-start">{opponentState.commandZone.map(card => (<div key={card.instanceId} className="flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 border border-yellow-500 flex-shrink-0" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div></div>)}
-                            </div>
-                            <div className="absolute top-4 right-2 z-40 w-56 flex flex-col gap-2 pointer-events-none"><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">Library ({opponentState.library?.length || 0})</h4><CardImage isBack={true} className="w-16 h-20" /></div><div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-1">GY ({opponentState.graveyard?.length || 0}) / Exile ({opponentState.exile?.length || 0})</h4><div className="flex gap-2">{opponentState.graveyard?.[0] ? <CardImage src={opponentState.graveyard[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}{opponentState.exile?.[0] ? <CardImage src={opponentState.exile[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div></div></div>
-                        </>
-                    )}
-
                     {/* --- BATTLEFIELD UPPER --- */}
-                    <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
-                        {opponentState?.battlefieldUpper?.map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-10" style={{ left: card.x, top: 10 }}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                        <div ref={playerUpperBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
-                            {(myState.battlefieldUpper || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-20" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldUpper')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'upper')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                        </div>
-                    </div>
-
-                    {/* --- BATTLEFIELD LOWER --- */}
-                    <div style={{ top: '66vh', bottom: 0 }} className="w-full absolute bg-blue-900/20 overflow-hidden">
-                        <div ref={playerLowerBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
-                            {(myState.battlefieldLower || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldLower')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'lower')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
-                        </div>
-                    </div>
-
-                    {/* --- PLAYER UI --- */}
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50">
-                        {myHandMinimized ? (
-                            <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">Maximize Hand</button>
-                        ) : (
-                            <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]" onDrop={(e) => handleDropOnZone(e, 'hand')} onDragOver={(e) => e.preventDefault()}>
-                                <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
-                                <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide"><span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span><div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">{myState.hand.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} className="cursor-pointer flex-shrink-0"><CardImage src={card.image_url} style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} className="hover:scale-110 hover:z-10 transition-transform" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>{showMulligan && (<div className="absolute -top-3 right-8"><button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button></div>)}</div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="absolute bottom-4 left-2 z-40 w-56 flex flex-col gap-2">
-                        {/* --- TOOLS MENU (Tokens & Dice) --- */}
-                        <div className="relative">
-                            <button onClick={() => setToolsMenuOpen(!toolsMenuOpen)} className="w-full bg-purple-900/80 hover:bg-purple-800/80 border border-purple-500/50 text-purple-200 font-bold py-2 rounded-lg shadow-lg flex items-center justify-center gap-2 backdrop-blur-sm"><i data-lucide="box" className="w-4 h-4"></i> Tools & Tokens</button>
-                            {toolsMenuOpen && (
-                                <div className="absolute bottom-full mb-2 left-0 w-64 bg-gray-800 border border-purple-500/50 rounded-xl shadow-2xl p-3 grid gap-3 z-[100]">
-                                    <div className="flex justify-between items-center border-b border-gray-700 pb-2"><h4 className="font-bold text-white text-sm">Create Token</h4><button onClick={() => setToolsMenuOpen(false)}><i data-lucide="x" className="w-4 h-4 text-gray-400"></i></button></div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {COMMON_TOKENS.map(token => (<button key={token.name} onClick={() => createToken(token)} className="flex flex-col items-center bg-gray-700 hover:bg-gray-600 p-2 rounded border border-gray-600 transition-colors"><img src={token.image} className="w-8 h-8 rounded-full mb-1 object-cover" /><span className="text-[10px] text-white text-center leading-tight">{token.name}</span></button>))}
-                                    </div>
-                                    <button onClick={() => setCustomTokenModalOpen(true)} className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-2 rounded font-bold border border-blue-400/50">Create Custom Token</button>
-                                    <div className="border-t border-gray-700 pt-2"><button onClick={() => alert("Roll D20: " + (Math.floor(Math.random() * 20) + 1))} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm py-1 rounded">Roll D20</button></div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border border-blue-500/50 flex-shrink-0 shadow-lg">
-                            <div className="flex justify-between items-center mb-2"><h4 className="text-blue-400 text-sm font-bold">You</h4>{startingPlayerId === user.uid && <Coin />}</div>
-                            <div className="text-white text-sm space-y-1">
-                                <div className="flex items-center justify-between"><span>Life:</span><span className="text-green-400 font-bold text-lg">{myState.life}</span></div>
-                                <div className="flex gap-1"><button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button><button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button></div>
-                                <div className="flex items-center justify-between mt-2"><span>Cmd Dmg:</span><span className="text-red-400 font-bold">{myState.commanderDamage || 0}</span></div>
-                                <div className="flex gap-1"><button onClick={() => { const currentCmdDmg = myState.commanderDamage || 0; updateMyState({ commanderDamage: currentCmdDmg + 1, life: myState.life - 1 }); }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button><button onClick={() => { const currentCmdDmg = myState.commanderDamage || 0; if (currentCmdDmg > 0) updateMyState({ commanderDamage: currentCmdDmg - 1, life: myState.life + 1 }); }} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500" disabled={!(myState.commanderDamage > 0)}>-</button></div>
-                            </div>
-                        </div>
-                        <div className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 overflow-hidden flex flex-col shadow-lg" onDrop={(e) => handleDropOnZone(e, 'command')} onDragOver={(e) => e.preventDefault()}>
-                            <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
-                            <div className="flex flex-wrap gap-2 content-start">{myState.commandZone.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'command')} className="cursor-pointer flex-shrink-0 flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 hover:scale-110 transition-transform border border-yellow-500" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} />{card.isCommander && (<div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>)}</div>))}</div>
-                        </div>
-                        <button onClick={handleLeaveGame} className="w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0 shadow-lg">Leave Game</button>
-                    </div>
-
-                    <div className="absolute bottom-4 right-2 z-40 w-56 flex flex-col gap-2">
-                        <div className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center relative shadow-lg" onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })} onDrop={(e) => handleDropOnZone(e, 'library')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-sm font-bold mb-2">Library ({myState.library.length})</h4><CardImage isBack={true} className="w-20 h-28" /><div className="absolute inset-0 bg-blue-500/10 pointer-events-none rounded-lg border-2 border-transparent hover:border-blue-400/50"></div></div>
-                        <div className="flex gap-2"><div className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg" onClick={() => setViewingZone('graveyard')} onDrop={(e) => handleDropOnZone(e, 'graveyard')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-xs font-bold mb-1">GY ({myState.graveyard.length})</h4>{myState.graveyard[0] ? (<CardImage src={myState.graveyard[0].image_url} className="w-12 h-16" onMouseEnter={() => setHoveredCard(myState.graveyard[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div><div className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg" onClick={() => setViewingZone('exile')} onDrop={(e) => handleDropOnZone(e, 'exile')} onDragOver={(e) => e.preventDefault()}><h4 className="text-blue-400 text-xs font-bold mb-1">Exile ({myState.exile.length})</h4>{myState.exile[0] ? (<CardImage src={myState.exile[0].image_url} className="w-12 h-16" onMouseEnter={() => setHoveredCard(myState.exile[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}</div></div>
-                        <div className="flex gap-2 flex-shrink-0"><button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button><button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button></div>
+                <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
+                    {opponentState?.battlefieldUpper?.map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-10" style={{ left: card.x, top: 10 }}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
+                    <div ref={playerUpperBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
+                        {(myState.battlefieldUpper || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer z-20" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldUpper')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'upper')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
                     </div>
                 </div>
-            );
-        };
-        const RoomTimer = ({ emptyAt }) => { const [timeLeft, setTimeLeft] = useState(0); useEffect(() => { if (!emptyAt) return; const updateTimer = () => { const remaining = Math.max(0, emptyAt - Date.now()); setTimeLeft(remaining); }; updateTimer(); const interval = setInterval(updateTimer, 1000); return () => clearInterval(interval); }, [emptyAt]); if (!emptyAt) return null; const seconds = Math.floor(timeLeft / 1000); const minutes = Math.floor(seconds / 60); const remainingSeconds = seconds % 60; const isWarning = timeLeft < 60000; return <div className={`text-xs ${isWarning ? 'text-red-400 timer-warning' : 'text-gray-400'}`}>⏱️ {minutes}:{remainingSeconds.toString().padStart(2, '0')}</div>; };
-        const App = ({ user }) => {
+                    {/* --- BATTLEFIELD LOWER --- */}
+                <div style={{ top: '66vh', bottom: 0 }} className="w-full absolute bg-blue-900/20 overflow-hidden">
+                    <div ref={playerLowerBattlefieldRef} className="h-full w-full relative" onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)} onDragOver={(e) => e.preventDefault()}>
+                        {(myState.battlefieldLower || []).map(card => (<div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldLower')}><CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`} onClick={() => toggleTap(card.instanceId, 'lower')} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}
+                    </div>
+                </div>
+                    {/* --- PLAYER UI --- */}
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50">
+                    {myHandMinimized ? (
+                        <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">Maximize Hand</button>
+                    ) : (
+                        <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]" onDrop={(e) => handleDropOnZone(e, 'hand')} onDragOver={(e) => e.preventDefault()}>
+                            <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
+                            <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide"><span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span><div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">{myState.hand.map(card => (<div key={card.instanceId} draggable onDragStart={(e) => handleDragStart(e, card, 'hand')} className="cursor-pointer flex-shrink-0"><CardImage src={card.image_url} style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }} className="hover:scale-110 hover:z-10 transition-transform" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>{showMulligan && (<div className="absolute -top-3 right-8"><button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button></div>)}</div>
+                        </div>
+                    )}
+                </div>
+                const App = ({ user }) => {
             const [view, setView] = useState('lobby'); const [selectedDeck, setSelectedDeck] = useState(null); const [decks, setDecks] = useState([]); const [rooms, setRooms] = useState([]); const [currentRoomId, setCurrentRoomId] = useState(null);
             useEffect(() => { const loadDecks = async () => { const deckCollection = window.collection(window.db, 'users', user.uid, 'decks'); const snapshot = await window.getDocs(deckCollection); setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }; loadDecks(); const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => { setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }); const cleanupInterval = setInterval(async () => { const now = Date.now(); const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection()); roomsSnapshot.docs.forEach(async (docSnap) => { const data = docSnap.data(); if (data.emptyAt && data.emptyAt <= now) await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id)); }); }, 10000); return () => { unsubscribe(); clearInterval(cleanupInterval); }; }, []);
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
-            const createRoom = async () => { if (!selectedDeck) { alert("Select a deck first"); return; } const roomRef = await window.addDoc(window.getPublicRoomCollection(), { host: user.uid, hostName: user.displayName || user.email.split('@')[0], players: [user.uid], createdAt: Date.now(), gameState: {}, emptyAt: null, playerDecks: { [user.uid]: selectedDeck } }); setCurrentRoomId(roomRef.id); setView('game'); };
             
-            // JOIN ROOM (FIXED SAFE ARRAY HANDLING)
+            const createRoom = async () => { if (!selectedDeck) { alert("Select a deck first"); return; } 
+                
+                // SANITIZE deck before storing
+                const sanitizedDeck = {
+                    id: selectedDeck.id,
+                    name: selectedDeck.name,
+                    colors: selectedDeck.colors || [],
+                    commander: selectedDeck.commander ? sanitizeCard(selectedDeck.commander) : null,
+                    cards: selectedDeck.cards.map(c => sanitizeCard(c))
+                };
+                
+                const roomRef = await window.addDoc(window.getPublicRoomCollection(), { host: user.uid, hostName: user.displayName || user.email.split('@')[0], players: [user.uid], createdAt: Date.now(), gameState: {}, emptyAt: null, playerDecks: { [user.uid]: sanitizedDeck } }); setCurrentRoomId(roomRef.id); setView('game'); };
+            
+            // JOIN ROOM (FIXED SAFE ARRAY HANDLING + SANITIZED DECK)
             const joinRoom = async (roomId) => { 
                 if (!selectedDeck) { alert("Select a deck first"); return; } 
+                
+                // SANITIZE the deck before storing
+                const sanitizedDeck = {
+                    id: selectedDeck.id,
+                    name: selectedDeck.name,
+                    colors: selectedDeck.colors || [],
+                    commander: selectedDeck.commander ? sanitizeCard(selectedDeck.commander) : null,
+                    cards: selectedDeck.cards.map(c => sanitizeCard(c))
+                };
                 
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const room = rooms.find(r => r.id === roomId);
@@ -707,7 +662,7 @@
                 await window.updateDoc(roomRef, { 
                     players: newPlayers, 
                     emptyAt: null, 
-                    [`playerDecks.${user.uid}`]: selectedDeck 
+                    [`playerDecks.${user.uid}`]: sanitizedDeck 
                 }); 
                 
                 setCurrentRoomId(roomId); 
