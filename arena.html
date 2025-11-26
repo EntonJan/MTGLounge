@@ -25,7 +25,7 @@
         }
     </script>
     <style>
-        body { background-color: #111827; color: #e5e5e5; font-family: 'Inter', sans-serif; overflow: hidden; }
+         body { background-color: #111827; color: #e5e5e5; font-family: 'Inter', sans-serif; overflow: hidden; }
         .glass { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
         .glass-dark { background: rgba(17, 24, 39, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
         .card-shadow { box-shadow: -2px 2px 8px rgba(0,0,0,0.5); }
@@ -57,6 +57,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        // HINWEIS: arrayUnion/arrayRemove sind nicht in deinen Imports, also lasse ich sie weg und halte mich an deine Logik.
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -95,18 +96,19 @@
                 const rootElement = document.getElementById('app-root');
                 if (user) {
                     window.currentUser = user;
+                    
                     if (typeof App !== 'undefined') {
                         const root = ReactDOM.createRoot(rootElement);
                         root.render(React.createElement(App, { user: user })); 
                     } else {
-                        setTimeout(() => {
+                         setTimeout(() => {
                             if (typeof App !== 'undefined') {
                                 const root = ReactDOM.createRoot(rootElement);
-                                root.render(React.createElement(App, { user: user }));
+                                 root.render(React.createElement(App, { user: user }));
                             }
                         }, 100);
                     }
-                } else {
+                 } else {
                     window.location.href = 'index.html';
                 }
             });
@@ -128,36 +130,36 @@
                 <header className="bg-gray-800 shadow-md p-4 flex-shrink-0 border-b border-gray-700 z-50 relative">
                     <div className="max-w-7xl mx-auto flex justify-between items-center h-full">
                         <div className="flex items-center space-x-4">
-                            <h1 className="text-2xl font-bold text-red-400 tracking-tight">Arena</h1>
+                             <h1 className="text-2xl font-bold text-red-400 tracking-tight">Arena</h1>
                             <button onClick={() => window.location.href = 'homescreen.html'} className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-full transition-colors shadow-sm" title="Home Menu">
                                 <i data-lucide="home" className="w-5 h-5"></i>
-                            </button>
+                             </button>
                         </div>
                         {selectedDeck && (
                             <div className="hidden md:flex flex-col items-center absolute left-1/2 transform -translate-x-1/2">
                                  <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">Playing With</span>
                                  <span className="text-yellow-400 font-bold text-lg leading-none">{selectedDeck.name}</span>
-                            </div>
+                             </div>
                         )}
                         <div className="text-right text-sm">
                             <div className="flex items-center justify-end space-x-2">
-                                 <span className="font-semibold text-white cursor-pointer hover:text-red-300" onClick={async () => {
+                                  <span className="font-semibold text-white cursor-pointer hover:text-red-300" onClick={async () => {
                                      const newName = prompt(`Enter new display name:`);
                                      if (newName && newName.trim()) {
                                          try { await window.updateProfile(user, { displayName: newName.trim() }); window.location.reload(); } catch(e) {}
                                      }
                                  }}>{displayName}</span>
-                                 <span className="text-gray-500">| {hexId}</span>
+                                <span className="text-gray-500">| {hexId}</span>
                             </div>
                              <div className="flex items-center justify-end space-x-2 mt-1">
                                 <span className="text-xs text-gray-500">{user.email}</span>
                                 <button onClick={() => window.signOut(window.auth).then(() => window.location.href = 'index.html')} className="text-red-400 hover:text-red-300 text-xs flex items-center">
                                     <i data-lucide="log-out" className="w-3 h-3 mr-1"></i> Logout
-                                </button>
+                                 </button>
                             </div>
                         </div>
                     </div>
-                </header>
+                 </header>
             );
         };
 
@@ -168,12 +170,12 @@
                     className={`relative rounded-lg overflow-hidden bg-gray-800 ${className}`} 
                     style={style}
                     onClick={onClick}
-                    onContextMenu={onContextMenu}
+                     onContextMenu={onContextMenu}
                     onMouseEnter={onMouseEnter}
                     onMouseLeave={onMouseLeave}
                 >
                     <img src={imageSrc} alt={alt || 'Card Back'} className="w-full h-full object-cover select-none pointer-events-none" />
-                    {!isBack && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>}
+                     {!isBack && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>}
                 </div>
             );
         };
@@ -184,14 +186,14 @@
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                     <div className="bg-gray-800 border border-gray-600 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                         <div className="flex justify-between items-center p-4 border-b border-gray-700">
-                            <h3 className="text-xl font-bold text-yellow-400">{title}</h3>
+                             <h3 className="text-xl font-bold text-yellow-400">{title}</h3>
                             <button onClick={onClose} className="text-gray-400 hover:text-white">
                                 <i data-lucide="x" className="w-6 h-6"></i>
-                            </button>
+                             </button>
                         </div>
                         <div className="p-4 overflow-y-auto flex-grow">
                             {children}
-                        </div>
+                         </div>
                     </div>
                 </div>
             );
@@ -201,11 +203,11 @@
             return (
                 <div className="fixed z-[200] bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[150px]" style={{ left: x, top: y }} onMouseLeave={onClose}>
                     {options.map((opt, i) => (
-                        <button key={i} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
+                         <button key={i} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
                             {opt.label}
                         </button>
                     ))}
-                </div>
+                 </div>
             );
         };
 
@@ -243,15 +245,15 @@
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const unsubscribe = window.onSnapshot(roomRef, (docSnap) => {
                     if (docSnap.exists()) {
-                        const data = docSnap.data();
+                         const data = docSnap.data();
                         setRoomState(data);
                         setLoading(false);
                         
-                        if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
+                         if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
                             setGameResult(data.gameResult);
                             setLeaveGameModal(true);
                         }
-                    } else { onLeave(); }
+                     } else { onLeave(); }
                 });
                 return () => unsubscribe();
             }, [roomId]);
@@ -270,17 +272,17 @@
                 const myId = user.uid;
                 if (roomState.gameState && roomState.gameState[myId]) {
                     hasInitializedRef.current = true;
-                    return;
+                     return;
                 }
                 if (initializingRef.current || hasInitializedRef.current) return;
 
                 console.log("Initializing Player...");
                 initializingRef.current = true;
-                
+                 
                 const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false }));
                 for (let i = initLibrary.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
-                    [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]];
+                     [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]];
                 }
                 const startingHand = initLibrary.splice(0, 7);
                 const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true }] : [];
@@ -359,8 +361,8 @@
                 if (x === undefined || y === undefined) {
                     const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
                     const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
-                    x = bfWidth - 360 - (Math.random() * 50); 
-                    y = (bfHeight / 2) - 60 + (Math.random() * 50); 
+                    x = bfWidth - 360 - (Math.random() * 50);
+                    y = (bfHeight / 2) - 60 + (Math.random() * 50);
                 }
 
                 const newCard = { ...card, isTapped: false, x, y };
@@ -393,7 +395,7 @@
                     battlefieldLower: (myState.battlefieldLower || []).filter(filter),
                     hand: myState.hand.filter(filter),
                     graveyard: myState.graveyard.filter(filter),
-                    exile: myState.exile.filter(filter),
+                     exile: myState.exile.filter(filter),
                     commandZone: myState.commandZone.filter(filter),
                     library: myState.library.filter(filter)
                 };
@@ -429,7 +431,7 @@
                         winner,
                         submittedBy: user.uid,
                         confirmed: false,
-                        timestamp: Date.now()
+                         timestamp: Date.now()
                     }
                 });
             };
@@ -469,7 +471,6 @@
                         timestamp: Date.now(),
                         user: user.uid
                     };
-
                     await window.addDoc(
                         window.collection(db, 'users', user.uid, 'local_matches'),
                         matchData
@@ -487,12 +488,10 @@
                         timestamp: Date.now(),
                         user: opponentId
                     };
-
                     await window.addDoc(
                         window.collection(db, 'users', opponentId, 'local_matches'),
                         opponentMatchData
                     );
-
                     console.log('Match results saved to both trackers');
                 } catch (error) {
                     console.error('Error saving match to trackers:', error);
@@ -501,11 +500,9 @@
 
             const confirmGameResult = async () => {
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
-                
                 await window.updateDoc(roomRef, {
                     'gameResult.confirmed': true
                 });
-                
                 await saveMatchToTrackers(gameResult.winner === 'draw' ? null : gameResult.winner);
                 
                 setLeaveGameModal(false);
@@ -513,7 +510,7 @@
             };
 
             const handleDragStart = (e, card, fromZone) => setDraggedCard({ card, fromZone });
-            
+
             const handleDropOnBattlefield = (e, targetBattlefield, battlefieldRef) => {
                 e.preventDefault();
                 if (!draggedCard) return;
@@ -522,14 +519,13 @@
                 let y = e.clientY - rect.top - 60;
 
                 if (targetBattlefield === 'lower') {
-                    if (x < 240) x = 240;
+                    if (x < 240) x = 240; 
                 }
 
                 if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
                     const updates = {};
                     updates.battlefieldUpper = (myState.battlefieldUpper || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
                     updates.battlefieldLower = (myState.battlefieldLower || []).filter(c => c.instanceId !== draggedCard.card.instanceId);
-                    
                     const movedCard = { ...draggedCard.card, x, y };
                     if (targetBattlefield === 'upper') {
                         updates.battlefieldUpper = [...updates.battlefieldUpper, movedCard];
@@ -557,16 +553,16 @@
                     
                     {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
 
-                    {libraryMenu && (
+                     {libraryMenu && (
                         <ContextMenu 
                             x={libraryMenu.x} y={libraryMenu.y} 
                             onClose={() => setLibraryMenu(null)}
-                            options={[
+                             options={[
                                 { label: 'Draw Card', action: drawCard },
                                 { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } },
                                 { label: 'Shuffle Library', action: shuffleLibrary },
                                 { label: 'View Entire Library', action: () => setViewingZone('library') }
-                            ]} 
+                             ]} 
                         />
                     )}
 
@@ -574,21 +570,21 @@
                         <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library">
                             <div className="flex flex-col items-center gap-4">
                                 <img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" />
-                                <div className="flex gap-4">
+                                 <div className="flex gap-4">
                                     <button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button>
                                     <button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button>
                                     <button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button>
                                 </div>
                             </div>
                         </Modal>
-                    )}
+                     )}
 
                     {viewingZone && (
                         <Modal isOpen={true} onClose={() => setViewingZone(null)} title={`Viewing ${viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}`}>
                             <div className="grid grid-cols-4 gap-4">
-                                {myState[viewingZone]?.map((card, idx) => (
+                                 {myState[viewingZone]?.map((card, idx) => (
                                     <div key={idx} className="relative group">
-                                        <img src={card.image_url} className="w-full rounded-lg shadow-lg" />
+                                         <img src={card.image_url} className="w-full rounded-lg shadow-lg" />
                                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity">
                                              <button 
                                                 onClick={() => { playCard(card, viewingZone, 'lower'); }} 
@@ -596,280 +592,281 @@
                                             >Play</button>
                                             {viewingZone === 'library' && (
                                                 <button 
-                                                    onClick={() => { moveCardToZone(card, 'library_top'); setViewingZone(null); }} 
-                                                    className="bg-yellow-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-yellow-500"
+                                                     onClick={() => { moveCardToZone(card, 'library_top'); setViewingZone(null); }} 
+                                                     className="bg-yellow-600 px-3 py-1 rounded text-xs font-bold text-white hover:bg-yellow-500"
                                                 >Top</button>
-                                            )}
+                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                 ))}
                             </div>
                         </Modal>
                     )}
 
-                    {leaveGameModal && (
+                     {leaveGameModal && (
                         <Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Result">
                             {!roomState?.gameResult?.submittedBy ? (
                                 <div className="flex flex-col items-center gap-4">
                                     <p className="text-white text-lg">Who won the game?</p>
-                                    <div className="flex gap-4">
+                                     <div className="flex gap-4">
                                         <button onClick={() => { submitGameResult(user.uid); }} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">I Won</button>
-                                        <button onClick={() => { submitGameResult(opponentId); }} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Opponent Won</button>
+                                         <button onClick={() => { submitGameResult(opponentId); }} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Opponent Won</button>
                                         <button onClick={() => { submitGameResult('draw'); }} className="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded text-white font-bold">Draw</button>
-                                    </div>
+                                     </div>
                                 </div>
                             ) : roomState.gameResult.submittedBy === user.uid ? (
                                 <div className="flex flex-col items-center gap-4">
                                     <p className="text-white text-lg">Waiting for opponent to confirm result...</p>
-                                    <div className="loader"></div>
+                                     <div className="loader"></div>
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center gap-4">
+                               <div className="flex flex-col items-center gap-4">
                                     <p className="text-white text-lg">
                                         {gameResult.winner === user.uid ? 'You won!' : 
-                                         gameResult.winner === opponentId ? `${opponentName} won!` : 
+                                             gameResult.winner === opponentId ? `${opponentName} won!` : 
                                          'Game was a draw'}
-                                    </p>
+                                     </p>
                                     <p className="text-gray-400">Do you confirm this result?</p>
-                                    <div className="flex gap-4">
+                                     <div className="flex gap-4">
                                         <button onClick={confirmGameResult} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded text-white font-bold">Confirm</button>
                                         <button onClick={() => setLeaveGameModal(false)} className="bg-red-600 hover:bg-red-500 px-6 py-3 rounded text-white font-bold">Dispute</button>
                                     </div>
                                 </div>
-                            )}
+                             )}
                         </Modal>
                     )}
 
                     {/* --- OPPONENT ZONE (TOP 1/3) --- */}
                     <div className="absolute top-0 left-0 w-full h-[33vh] bg-red-900/10 border-b-2 border-red-500/30 z-0">
                          <div className="relative w-full h-full overflow-hidden">
-                            {opponentState?.battlefieldLower?.map(card => (
+                            {(opponentState?.battlefieldLower || []).map(card => (
                                 <div 
-                                    key={card.instanceId} 
+                                     key={card.instanceId} 
                                     className="absolute cursor-pointer"
-                                    style={{ left: card.x, bottom: card.y }}
+                                     style={{ left: card.x, bottom: card.y }}
                                 >
                                     <CardImage 
-                                        src={card.image_url} 
+                                         src={card.image_url} 
                                         className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                         onMouseLeave={() => setHoveredCard(null)}
-                                    />
+                                     />
                                 </div>
-                            )) || <div className="flex items-center justify-center h-full text-red-500/20 text-sm font-bold uppercase tracking-widest">Opponent Territory</div>}
+                            ))}
                          </div>
                     </div>
 
                     {opponentState && (
-                        <>
+                         <>
                             {/* Opponent Hand (Overlay) */}
                             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50">
                                 {oppHandMinimized ? (
                                     <button onClick={() => setOppHandMinimized(false)} className="bg-red-900/90 backdrop-blur-sm px-4 py-1 rounded-b-lg border border-red-500/50 text-red-400 font-bold text-xs shadow-lg hover:bg-red-800 transition-colors">
                                         Maximize Hand
-                                    </button>
+                                     </button>
                                 ) : (
-                                    <div className="bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 relative group shadow-xl">
+                                     <div className="bg-red-900/90 backdrop-blur-sm px-4 py-2 rounded-b-lg border-b border-x border-red-500/50 relative group shadow-xl">
                                         <button onClick={() => setOppHandMinimized(true)} className="absolute top-0 right-0 p-1 text-red-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
-                                        <div className="flex gap-2 items-center h-[16vh] overflow-x-auto scrollbar-hide">
+                                         <div className="flex gap-2 items-center h-[16vh] overflow-x-auto scrollbar-hide">
                                             <span className="text-red-400 text-xs font-bold mr-2 flex-shrink-0">Opponent Hand ({opponentState.hand?.length || 0})</span>
                                             {Array(Math.min(opponentState.hand?.length || 0, 10)).fill(0).map((_, i) => (
                                                 <CardImage key={i} isBack={true} className="flex-shrink-0" style={{ width: 'calc((16vh - 8px) * 0.714)', height: 'calc(16vh - 8px)' }} />
                                             ))}
                                         </div>
-                                    </div>
+                                     </div>
                                 )}
                             </div>
 
-                            {/* Opponent Left Sidebar (Life/Command) (Overlay) */}
+                             {/* Opponent Left Sidebar (Life/Command) (Overlay) */}
                             <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
                                 <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
                                     <div className="flex justify-between items-center mb-2">
                                         <h4 className="text-red-400 text-sm font-bold">Opponent</h4>
-                                        {startingPlayerId === opponentId && <Coin />}
+                                         {startingPlayerId === opponentId && <Coin />}
                                     </div>
-                                    <div className="text-white text-sm space-y-1">
+                                     <div className="text-white text-sm space-y-1">
                                         <div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div>
                                         <div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div>
                                     </div>
                                 </div>
+                                
                                 {opponentState.commandZone?.length > 0 && (
                                     <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg">
                                         <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
-                                        <div className="flex flex-wrap gap-2 content-start">
+                                         <div className="flex flex-wrap gap-2 content-start">
                                             {opponentState.commandZone.map(card => (
-                                                <div key={card.instanceId} className="flex flex-col items-center">
+                                                 <div key={card.instanceId} className="flex flex-col items-center">
                                                     <CardImage 
-                                                        src={card.image_url} 
-                                                        className="w-12 h-16 border border-yellow-500 flex-shrink-0"
+                                                         src={card.image_url} 
+                                                         className="w-12 h-16 border border-yellow-500 flex-shrink-0"
                                                         onMouseEnter={() => setHoveredCard(card.image_url)}
-                                                        onMouseLeave={() => setHoveredCard(null)}
+                                                         onMouseLeave={() => setHoveredCard(null)}
                                                     />
-                                                </div>
+                                                 </div>
                                             ))}
-                                        </div>
+                                         </div>
                                     </div>
                                 )}
-                            </div>
+                             </div>
 
                             {/* Opponent Right Sidebar (Lib/GY) (Overlay) */}
                             <div className="absolute top-4 right-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
-                                <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg">
+                                 <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg">
                                     <h4 className="text-red-400 text-sm font-bold mb-1">Library ({opponentState.library?.length || 0})</h4>
                                     <CardImage isBack={true} className="w-16 h-20" />
                                 </div>
-                                <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg">
+                                 <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex flex-col items-center justify-center shadow-lg">
                                     <h4 className="text-red-400 text-sm font-bold mb-1">GY ({opponentState.graveyard?.length || 0}) / Exile ({opponentState.exile?.length || 0})</h4>
-                                    <div className="flex gap-2">
+                                     <div className="flex gap-2">
                                         {opponentState.graveyard?.[0] ? <CardImage src={opponentState.graveyard[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}
                                         {opponentState.exile?.[0] ? <CardImage src={opponentState.exile[0].image_url} className="w-12 h-16" /> : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}
                                     </div>
                                 </div>
-                            </div>
+                             </div>
                         </>
                     )}
 
                     {/* --- MIDDLE ZONE (SHARED BATTLEFIELD UPPER) --- */}
-                    <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
-                        {opponentState?.battlefieldUpper?.map(card => (
+                     <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
+                        {(opponentState?.battlefieldUpper || []).map(card => (
                             <div 
-                                key={card.instanceId} 
+                                 key={card.instanceId} 
                                 className="absolute cursor-pointer z-10"
                                 style={{ left: card.x, top: 10 }}
-                            >
+                             >
                                 <CardImage 
                                     src={card.image_url} 
-                                    className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`}
+                                     className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`}
                                     onMouseEnter={() => setHoveredCard(card.image_url)}
                                     onMouseLeave={() => setHoveredCard(null)}
-                                />
+                                 />
                             </div>
                         ))}
 
                         <div 
-                            ref={playerUpperBattlefieldRef}
+                             ref={playerUpperBattlefieldRef}
                             className="h-full w-full relative"
                             onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)}
-                            onDragOver={(e) => e.preventDefault()}
+                             onDragOver={(e) => e.preventDefault()}
                         >
                             {(myState.battlefieldUpper || []).map(card => (
                                 <div 
-                                    key={card.instanceId} 
+                                     key={card.instanceId} 
                                     className="absolute cursor-pointer z-20"
-                                    style={{ left: card.x, top: card.y }}
+                                     style={{ left: card.x, top: card.y }}
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')}
-                                >
+                                     >
                                     <CardImage 
                                         src={card.image_url} 
                                         className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
                                         onClick={() => toggleTap(card.instanceId, 'upper')}
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
+                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
                                 </div>
-                            ))}
+                             ))}
                         </div>
                     </div>
 
                     {/* --- BOTTOM ZONE (PLAYER LOWER BATTLEFIELD) --- */}
-                    <div style={{ top: '66vh', bottom: 0 }} className="w-full absolute bg-blue-900/20 overflow-hidden">
+                     <div style={{ top: '66vh', bottom: 0 }} className="w-full absolute bg-blue-900/20 overflow-hidden">
                         <div 
                             ref={playerLowerBattlefieldRef}
-                            className="h-full w-full relative"
+                             className="h-full w-full relative"
                             onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)}
                             onDragOver={(e) => e.preventDefault()}
                         >
-                            {(myState.battlefieldLower || []).map(card => (
+                             {(myState.battlefieldLower || []).map(card => (
                                 <div 
                                     key={card.instanceId} 
-                                    className="absolute cursor-pointer"
+                                     className="absolute cursor-pointer"
                                     style={{ left: card.x, top: card.y }}
                                     draggable
-                                    onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')}
+                                     onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')}
                                 >
                                     <CardImage 
-                                        src={card.image_url} 
+                                         src={card.image_url} 
                                         className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
-                                        onClick={() => toggleTap(card.instanceId, 'lower')}
+                                         onClick={() => toggleTap(card.instanceId, 'lower')}
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
+                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
                                 </div>
-                            ))}
+                             ))}
                         </div>
                     </div>
 
                     {/* --- PLAYER UI OVERLAYS (BOTTOM) --- */}
                     
-                    {/* Player Hand */}
+                     {/* Player Hand */}
                     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 z-50">
                         {myHandMinimized ? (
                             <button onClick={() => setMyHandMinimized(false)} className="bg-blue-900/90 backdrop-blur-sm px-4 py-1 rounded-t-lg border border-blue-500/50 text-blue-400 font-bold text-xs shadow-lg hover:bg-blue-800 transition-colors">
                                 Maximize Hand
-                            </button>
+                             </button>
                         ) : (
                             <div className="bg-blue-900/90 backdrop-blur-sm px-4 py-2 rounded-t-lg border-t border-x border-blue-500/50 relative group shadow-xl max-w-[95vw]"
-                                onDrop={(e) => handleDropOnZone(e, 'hand')}
+                                 onDrop={(e) => handleDropOnZone(e, 'hand')}
                                 onDragOver={(e) => e.preventDefault()}
                             >
-                                <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
+                                 <button onClick={() => setMyHandMinimized(true)} className="absolute top-0 right-0 p-1 text-blue-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Minimize Hand"><i data-lucide="minus" className="w-3 h-3"></i></button>
                                 <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide">
                                     <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span>
-                                    <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
+                                     <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
                                         {myState.hand.map(card => (
-                                            <div 
+                                             <div 
                                                 key={card.instanceId}
-                                                draggable
+                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, card, 'hand')}
-                                                className="cursor-pointer flex-shrink-0"
+                                                 className="cursor-pointer flex-shrink-0"
                                             >
-                                                <CardImage 
+                                                 <CardImage 
                                                     src={card.image_url} 
-                                                    style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }}
+                                                     style={{ width: 'calc((18vh - 8px) * 0.714)', height: 'calc(18vh - 8px)' }}
                                                     className="hover:scale-110 hover:z-10 transition-transform"
-                                                    onMouseEnter={() => setHoveredCard(card.image_url)}
+                                                     onMouseEnter={() => setHoveredCard(card.image_url)}
                                                     onMouseLeave={() => setHoveredCard(null)}
-                                                />
+                                                 />
                                             </div>
-                                        ))}
+                                         ))}
                                     </div>
                                     {showMulligan && (
                                         <div className="absolute -top-3 right-8">
                                             <button onClick={mulligan} className="bg-yellow-600 hover:bg-yellow-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg border border-yellow-400 animate-pulse" title="Shuffle hand into library and draw 7 new cards">MULLIGAN</button>
                                         </div>
                                     )}
-                                </div>
+                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Player Left Sidebar (Life/Command) */}
+                     {/* Player Left Sidebar (Life/Command) */}
                     <div className="absolute bottom-4 left-2 z-40 w-56 flex flex-col gap-2">
                         <div className="bg-blue-900/80 backdrop-blur-sm p-4 rounded-lg border border-blue-500/50 flex-shrink-0 shadow-lg">
-                            <div className="flex justify-between items-center mb-2">
+                             <div className="flex justify-between items-center mb-2">
                                 <h4 className="text-blue-400 text-sm font-bold">You</h4>
                                 {startingPlayerId === user.uid && <Coin />}
-                            </div>
+                             </div>
                             <div className="text-white text-sm space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span>Life:</span>
+                                     <span>Life:</span>
                                     <span className="text-green-400 font-bold text-lg">{myState.life}</span>
                                 </div>
-                                <div className="flex gap-1">
+                                 <div className="flex gap-1">
                                     <button onClick={() => updateMyState({ life: myState.life + 1 })} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500">+</button>
-                                    <button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button>
+                                     <button onClick={() => updateMyState({ life: myState.life - 1 })} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">-</button>
                                 </div>
                                 <div className="flex items-center justify-between mt-2">
-                                    <span>Cmd Dmg:</span>
+                                     <span>Cmd Dmg:</span>
                                     <span className="text-red-400 font-bold">{myState.commanderDamage || 0}</span>
                                 </div>
                                 <div className="flex gap-1">
-                                    <button onClick={() => {
+                                     <button onClick={() => {
                                         const currentCmdDmg = myState.commanderDamage || 0;
                                         const newCmdDmg = currentCmdDmg + 1;
                                         updateMyState({ commanderDamage: newCmdDmg, life: myState.life - 1 });
-                                    }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button>
+                                     }} className="flex-1 bg-red-600 px-2 py-1 rounded text-xs hover:bg-red-500">+</button>
                                     <button onClick={() => {
                                         const currentCmdDmg = myState.commanderDamage || 0;
                                         if (currentCmdDmg > 0) {
@@ -878,96 +875,96 @@
                                         }
                                     }} className="flex-1 bg-green-600 px-2 py-1 rounded text-xs hover:bg-green-500" disabled={!(myState.commanderDamage > 0)}>-</button>
                                 </div>
-                            </div>
+                             </div>
                         </div>
                         
                         <div 
-                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 overflow-hidden flex flex-col shadow-lg"
+                             className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 overflow-hidden flex flex-col shadow-lg"
                             onDrop={(e) => handleDropOnZone(e, 'command')}
                             onDragOver={(e) => e.preventDefault()}
-                        >
+                         >
                             <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
                             <div className="flex flex-wrap gap-2 content-start">
-                                {myState.commandZone.map(card => (
+                                 {myState.commandZone.map(card => (
                                     <div 
                                         key={card.instanceId}
-                                        draggable
+                                         draggable
                                         onDragStart={(e) => handleDragStart(e, card, 'command')}
-                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center"
+                                         className="cursor-pointer flex-shrink-0 flex flex-col items-center"
                                     >
                                         <CardImage 
-                                            src={card.image_url} 
+                                             src={card.image_url} 
                                             className="w-12 h-16 hover:scale-110 transition-transform border border-yellow-500"
-                                            onMouseEnter={() => setHoveredCard(card.image_url)}
+                                             onMouseEnter={() => setHoveredCard(card.image_url)}
                                             onMouseLeave={() => setHoveredCard(null)}
-                                        />
+                                         />
                                         {card.isCommander && (
-                                            <div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
+                                             <div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
                                         )}
                                     </div>
-                                ))}
+                                 ))}
                             </div>
                         </div>
 
                         <button onClick={handleLeaveGame} className="w-full bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0 shadow-lg">Leave Game</button>
-                    </div>
+                     </div>
 
                     {/* Player Right Sidebar (Lib/GY/Exile) */}
                     <div className="absolute bottom-4 right-2 z-40 w-56 flex flex-col gap-2">
                         <div 
-                            className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center relative shadow-lg"
+                             className="bg-blue-900/80 backdrop-blur-sm p-3 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center relative shadow-lg"
                             onClick={(e) => setLibraryMenu({ x: e.clientX, y: e.clientY })}
-                            onDrop={(e) => handleDropOnZone(e, 'library')}
+                             onDrop={(e) => handleDropOnZone(e, 'library')}
                             onDragOver={(e) => e.preventDefault()}
                         >
                             <h4 className="text-blue-400 text-sm font-bold mb-2">Library ({myState.library.length})</h4>
-                            <CardImage isBack={true} className="w-20 h-28" />
+                             <CardImage isBack={true} className="w-20 h-28" />
                             <div className="absolute inset-0 bg-blue-500/10 pointer-events-none rounded-lg border-2 border-transparent hover:border-blue-400/50"></div>
                         </div>
-                        
+                         
                         <div className="flex gap-2">
                             <div 
                                 className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg"
                                 onClick={() => setViewingZone('graveyard')}
                                 onDrop={(e) => handleDropOnZone(e, 'graveyard')}
-                                onDragOver={(e) => e.preventDefault()}
+                                 onDragOver={(e) => e.preventDefault()}
                             >
                                 <h4 className="text-blue-400 text-xs font-bold mb-1">GY ({myState.graveyard.length})</h4>
-                                {myState.graveyard[0] ? (
+                                 {myState.graveyard[0] ? (
                                     <CardImage 
                                         src={myState.graveyard[0].image_url} 
-                                        className="w-12 h-16"
+                                         className="w-12 h-16"
                                         onMouseEnter={() => setHoveredCard(myState.graveyard[0].image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
+                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
                                 ) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}
-                            </div>
+                             </div>
                             
                             <div 
-                                className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg"
+                                 className="bg-blue-900/80 backdrop-blur-sm p-2 rounded-lg border border-blue-500/50 cursor-pointer hover:bg-blue-900 flex-1 flex flex-col items-center justify-center shadow-lg"
                                 onClick={() => setViewingZone('exile')}
                                 onDrop={(e) => handleDropOnZone(e, 'exile')}
-                                onDragOver={(e) => e.preventDefault()}
+                                 onDragOver={(e) => e.preventDefault()}
                             >
                                 <h4 className="text-blue-400 text-xs font-bold mb-1">Exile ({myState.exile.length})</h4>
-                                {myState.exile[0] ? (
+                                 {myState.exile[0] ? (
                                     <CardImage 
                                         src={myState.exile[0].image_url} 
-                                        className="w-12 h-16"
+                                         className="w-12 h-16"
                                         onMouseEnter={() => setHoveredCard(myState.exile[0].image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
+                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
                                 ) : <div className="w-12 h-16 bg-black/50 rounded border border-gray-600"></div>}
-                            </div>
+                             </div>
                         </div>
 
                         <div className="flex gap-2 flex-shrink-0">
                             <button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button>
-                            <button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button>
+                             <button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button>
                         </div>
                     </div>
                 </div>
-            );
+             );
         };
 
         // Timer Component for Room List
@@ -979,7 +976,7 @@
                 
                 const updateTimer = () => {
                     const remaining = Math.max(0, emptyAt - Date.now());
-                    setTimeLeft(remaining);
+                     setTimeLeft(remaining);
                 };
 
                 updateTimer();
@@ -1020,11 +1017,11 @@
                     setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
-                const cleanupInterval = setInterval(async () => {
+                 const cleanupInterval = setInterval(async () => {
                     const now = Date.now();
                     const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection());
                     
-                    roomsSnapshot.docs.forEach(async (docSnap) => {
+                     roomsSnapshot.docs.forEach(async (docSnap) => {
                         const data = docSnap.data();
                         if (data.emptyAt && data.emptyAt <= now) {
                             console.log(`Deleting expired empty room: ${docSnap.id}`);
@@ -1041,8 +1038,17 @@
 
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
+            // --- START FIX (1/2): 1MiB Limit in createRoom ---
             const createRoom = async () => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
+                
+                // FIX: Erstelle ein kleines Referenz-Objekt statt des ganzen Decks
+                const deckReference = {
+                    deckId: selectedDeck.id,
+                    deckName: selectedDeck.name,
+                    commander: selectedDeck.commander?.name || 'N/A'
+                };
+                
                 const roomRef = await window.addDoc(window.getPublicRoomCollection(), {
                     host: user.uid, 
                     hostName: user.displayName || user.email.split('@')[0],
@@ -1050,25 +1056,39 @@
                     createdAt: Date.now(), 
                     gameState: {},
                     emptyAt: null,
-                    playerDecks: { [user.uid]: selectedDeck }
+                    // FIX: Speichere nur die kleine Referenz
+                    playerDecks: { [user.uid]: deckReference }
                 });
                 setCurrentRoomId(roomRef.id);
                 setView('game');
             };
+            // --- END FIX (1/2) ---
 
+            // --- START FIX (2/2): 1MiB Limit in joinRoom ---
             const joinRoom = async (roomId) => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
+                
+                // FIX: Erstelle ein kleines Referenz-Objekt statt des ganzen Decks
+                const deckReference = {
+                    deckId: selectedDeck.id,
+                    deckName: selectedDeck.name,
+                    commander: selectedDeck.commander?.name || 'N/A'
+                };
+                
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const room = rooms.find(r => r.id === roomId);
                 
+                // Wir behalten deine Logik zum Hinzufügen von Spielern bei
                 await window.updateDoc(roomRef, { 
                     players: [room.players[0], user.uid],
                     emptyAt: null,
-                    [`playerDecks.${user.uid}`]: selectedDeck
+                    // FIX: Speichere nur die kleine Referenz
+                    [`playerDecks.${user.uid}`]: deckReference 
                 });
                 setCurrentRoomId(roomId);
                 setView('game');
             };
+            // --- END FIX (2/2) ---
 
             const deleteRoom = async (roomId, e) => {
                 e.stopPropagation();
@@ -1097,13 +1117,13 @@
                         if (remainingPlayers.length === 0) {
                             await window.updateDoc(roomRef, {
                                 players: [],
-                                emptyAt: Date.now() + ROOM_TIMEOUT_MS
+                                 emptyAt: Date.now() + ROOM_TIMEOUT_MS
                             });
                         } else {
                             await window.updateDoc(roomRef, {
                                 players: remainingPlayers,
                                 emptyAt: null
-                            });
+                             });
                         }
                     }
                 }
@@ -1120,95 +1140,95 @@
                 <div className="h-screen flex flex-col bg-gray-900">
                     <Header user={user} selectedDeck={selectedDeck} />
                     <div className="flex-grow p-8 overflow-y-auto">
-                        <div className="max-w-6xl mx-auto">
+                         <div className="max-w-6xl mx-auto">
                             <div className="mb-6">
                                 <h2 className="text-3xl font-bold text-yellow-400 mb-4">Select Your Deck</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     {decks.map(deck => (
                                         <div 
-                                            key={deck.id} 
+                                             key={deck.id} 
                                             onClick={() => setSelectedDeck(deck)}
-                                            className={`p-4 rounded-lg cursor-pointer transition-all ${
+                                             className={`p-4 rounded-lg cursor-pointer transition-all ${
                                                 selectedDeck?.id === deck.id 
-                                                    ? 'bg-yellow-600 border-2 border-yellow-400' 
+                                                     ? 'bg-yellow-600 border-2 border-yellow-400' 
                                                     : 'bg-gray-800 border border-gray-700 hover:border-yellow-500'
-                                            }`}
+                                             }`}
                                         >
                                             <h3 className="font-bold text-white">{deck.name}</h3>
-                                            <p className="text-sm text-gray-400">{deck.cards?.length || 0} cards</p>
+                                             <p className="text-sm text-gray-400">{deck.cards?.length || 0} cards</p>
                                         </div>
                                     ))}
-                                </div>
+                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div>
+                                 <div>
                                     <h2 className="text-2xl font-bold text-yellow-400 mb-4">Create Room</h2>
                                     <div className="flex flex-col gap-4">
-                                        <button 
+                                         <button 
                                             onClick={createRoom}
-                                            disabled={!selectedDeck}
+                                             disabled={!selectedDeck}
                                             className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg text-lg"
-                                        >
+                                         >
                                             <i data-lucide="plus-circle" className="w-6 h-6 inline-block mr-2"></i>
                                             Create New Room
-                                        </button>
+                                         </button>
                                         <button 
-                                            onClick={clearMyRooms}
+                                             onClick={clearMyRooms}
                                             className="w-full bg-red-900/50 hover:bg-red-800/80 border border-red-700 text-red-200 py-3 px-6 rounded-lg text-sm transition-colors"
-                                        >
+                                         >
                                             <i data-lucide="trash-2" className="w-4 h-4 inline-block mr-2"></i>
-                                            Clear My Rooms (Cleanup)
+                                             Clear My Rooms (Cleanup)
                                         </button>
                                     </div>
-                                </div>
+                                 </div>
 
                                 <div>
                                     <h2 className="text-2xl font-bold text-yellow-400 mb-4">Available Rooms</h2>
-                                    <div className="space-y-2">
+                                     <div className="space-y-2">
                                         {rooms.filter(r => r.players.length < 2).map(room => (
-                                            <div key={room.id} className={`bg-gray-800 p-4 rounded-lg border ${room.emptyAt ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700'}`}>
+                                             <div key={room.id} className={`bg-gray-800 p-4 rounded-lg border ${room.emptyAt ? 'border-red-500/50 bg-red-900/10' : 'border-gray-700'}`}>
                                                 <div className="flex justify-between items-center">
-                                                    <div>
+                                                     <div>
                                                         <h3 className="font-bold text-white">{room.hostName}'s Room</h3>
-                                                        {room.emptyAt ? (
+                                                         {room.emptyAt ? (
                                                             <div className="flex items-center space-x-2 mt-1">
-                                                                <span className="text-red-400 text-sm font-bold">Closing:</span>
+                                                                 <span className="text-red-400 text-sm font-bold">Closing:</span>
                                                                 <RoomTimer emptyAt={room.emptyAt} />
-                                                            </div>
-                                                        ) : (
+                                                             </div>
+                                                         ) : (
                                                             <p className="text-sm text-gray-400">{room.players.length}/2 players</p>
-                                                        )}
+                                                         )}
                                                     </div>
-                                                    
+                                                     
                                                     {room.host === user.uid ? (
                                                         <button 
-                                                            onClick={(e) => deleteRoom(room.id, e)}
+                                                             onClick={(e) => deleteRoom(room.id, e)}
                                                             className="bg-red-600 hover:bg-red-500 text-white p-2 rounded"
-                                                            title="Delete my room"
-                                                        >
+                                                             title="Delete my room"
+                                                         >
                                                             <i data-lucide="trash" className="w-5 h-5"></i>
-                                                        </button>
+                                                         </button>
                                                     ) : (
-                                                        <button 
+                                                         <button 
                                                             onClick={() => joinRoom(room.id)}
-                                                            disabled={!selectedDeck || !!room.emptyAt}
-                                                            className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded"
+                                                              disabled={!selectedDeck || !!room.emptyAt}
+                                                             className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded"
                                                         >
-                                                            {room.emptyAt ? 'Closing' : 'Join'}
+                                                             {room.emptyAt ? 'Closing' : 'Join'}
                                                         </button>
-                                                    )}
+                                                     )}
                                                 </div>
-                                            </div>
+                                             </div>
                                         ))}
                                         {rooms.filter(r => r.players.length < 2).length === 0 && (
-                                            <p className="text-gray-500 text-center py-8">No rooms available</p>
+                                             <p className="text-gray-500 text-center py-8">No rooms available</p>
                                         )}
-                                    </div>
+                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                     </div>
                 </div>
             );
         };
