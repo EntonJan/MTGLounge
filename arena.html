@@ -70,7 +70,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where, FieldValue } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+        // Hinzugefügt: serverTimestamp zum Import
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where, FieldValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyB2qmkKq4sYOXDd7mF-Mq1rnCWCfDAWXew",
@@ -101,8 +102,12 @@
         window.updateDoc = updateDoc;
         window.query = query;
         window.where = where;
+        window.serverTimestamp = serverTimestamp; // NEU: serverTimestamp globalisiert
+        window.FieldValue = FieldValue;         // NEU: FieldValue globalisiert
         window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
-        window.firebase = { firestore: { Timestamp: { now: () => ({ toMillis: () => Date.now() }) }, FieldValue: { arrayUnion: (v) => v, arrayRemove: (v) => v } } };
+
+        // Die fehlerhafte window.firebase-Struktur wurde entfernt.
+        // window.firebase = { firestore: { Timestamp: { now: () => ({ toMillis: () => Date.now() }) }, FieldValue: { arrayUnion: (v) => v, arrayRemove: (v) => v } } };
 
         const renderAuthCheck = () => {
              onAuthStateChanged(auth, (user) => {
@@ -513,8 +518,9 @@
                         host: user.uid,
                         players: [user.uid],
                         active: true,
-                        createdAt: window.firebase.firestore.Timestamp.now(),
-                        lastActive: window.firebase.firestore.Timestamp.now(),
+                        // FIX: Changed to use window.serverTimestamp()
+                        createdAt: window.serverTimestamp(),
+                        lastActive: window.serverTimestamp(),
                         gameState: {}
                     });
                     
@@ -536,8 +542,9 @@
                 try {
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     await window.updateDoc(roomRef, {
-                        players: window.firebase.firestore.FieldValue.arrayUnion(user.uid),
-                        lastActive: window.firebase.firestore.Timestamp.now()
+                        // FIX: Changed to use window.FieldValue
+                        players: window.FieldValue.arrayUnion(user.uid),
+                        lastActive: window.serverTimestamp()
                     });
                     
                     onStartGame(roomId);
@@ -551,8 +558,9 @@
                 try {
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     await window.updateDoc(roomRef, {
-                        players: window.firebase.firestore.FieldValue.arrayRemove(user.uid),
-                        emptyAt: window.firebase.firestore.Timestamp.now()
+                        // FIX: Changed to use window.FieldValue
+                        players: window.FieldValue.arrayRemove(user.uid),
+                        emptyAt: window.serverTimestamp()
                     });
                 } catch(e) {
                     console.error("Error leaving room:", e);
@@ -929,6 +937,11 @@
             const [currentRoomId, setCurrentRoomId] = useState(null);
             const [view, setView] = useState('lobby'); 
 
+            // FIX 1 & 2: Lucide Icons müssen nach jedem Rendern neu erstellt werden
+            useEffect(() => {
+                lucide.createIcons();
+            });
+
             const handleSelectDeck = (deckOrAction) => {
                 if (deckOrAction === 'open_manager') {
                     setView('deck_manager');
@@ -971,9 +984,7 @@
         };
         
         // --- LUCIDE ICON INITIALIZATION ---
-        useEffect(() => {
-            lucide.createIcons();
-        }, []);
+        // Der fehlerhafte Aufruf wurde in die App-Komponente verschoben.
 
 
     </script>
