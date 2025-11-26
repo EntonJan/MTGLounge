@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena - MTG Suite</title>
+    <title>Arena - MTG Suite (Fixed)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -322,24 +322,93 @@
                 }
             }, [roomState, loading, user.uid, roomId]);
 
-            // Player Init
+            // Player Init (DEAD SYNC FIXED VERSION)
             useEffect(() => {
                 if (loading || !roomState) return;
                 const myId = user.uid;
-                if (roomState.gameState && roomState.gameState[myId]) { hasInitializedRef.current = true; return; }
+                
+                // If state exists for this user, mark as initialized and stop
+                if (roomState.gameState && roomState.gameState[myId]) { 
+                    hasInitializedRef.current = true; 
+                    return; 
+                }
+                
+                // Prevent concurrent runs
                 if (initializingRef.current || hasInitializedRef.current) return;
                 initializingRef.current = true;
                 
-                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
-                for (let i = initLibrary.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]]; }
-                const startingHand = initLibrary.splice(0, 7);
-                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: [] }] : [];
+                try {
+                    // Safe Deck Mapping to avoid undefined values
+                    const initLibrary = deck.cards.map(c => ({ 
+                        ...c, 
+                        instanceId: generateId(), 
+                        isTapped: false, 
+                        counters: [],
+                        // Fallbacks for optional fields
+                        image_url: c.image_url || '',
+                        name: c.name || 'Unknown',
+                        type_line: c.type_line || ''
+                    }));
+                    
+                    // Shuffle
+                    for (let i = initLibrary.length - 1; i > 0; i--) { 
+                        const j = Math.floor(Math.random() * (i + 1)); 
+                        [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]]; 
+                    }
+                    
+                    const startingHand = initLibrary.splice(0, 7);
+                    const commander = deck.commander ? [{ 
+                        ...deck.commander, 
+                        instanceId: generateId(), 
+                        isTapped: false, 
+                        isCommander: true, 
+                        counters: [],
+                        image_url: deck.commander.image_url || '',
+                        name: deck.commander.name || 'Commander'
+                    }] : [];
 
-                const initialPlayerState = { life: 40, commanderDamage: 0, cmdTax: 0, library: initLibrary, hand: startingHand, battlefieldUpper: [], battlefieldLower: [], graveyard: [], exile: [], commandZone: commander };
-                window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), { gameState: { [myId]: initialPlayerState } }, { merge: true })
-                .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
-                .catch(e => { initializingRef.current = false; });
-            }, [roomState, deck, loading]);
+                    const initialPlayerState = { 
+                        life: 40, 
+                        commanderDamage: 0, 
+                        cmdTax: 0, 
+                        library: initLibrary, 
+                        hand: startingHand, 
+                        battlefieldUpper: [], 
+                        battlefieldLower: [], 
+                        graveyard: [], 
+                        exile: [], 
+                        commandZone: commander 
+                    };
+
+                    // Deep Sanitize: Remove any remaining undefined values
+                    // This is crucial for Firebase set/update
+                    const safeState = JSON.parse(JSON.stringify(initialPlayerState));
+
+                    const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                    
+                    // Use dot-notation update to avoid overwriting other players
+                    window.updateDoc(roomRef, {
+                        [`gameState.${myId}`]: safeState
+                    })
+                    .then(() => { 
+                        hasInitializedRef.current = true; 
+                        initializingRef.current = false; 
+                    })
+                    .catch(e => { 
+                        console.warn("UpdateDoc failed, trying setDoc merge...", e);
+                        // Fallback: If map doesn't exist yet, merge it
+                        window.setDoc(roomRef, { gameState: { [myId]: safeState } }, { merge: true })
+                        .then(() => {
+                             hasInitializedRef.current = true; 
+                             initializingRef.current = false;
+                        });
+                    });
+
+                } catch (err) {
+                    console.error("Critical Init Error:", err);
+                    initializingRef.current = false;
+                }
+            }, [roomState, deck, loading, roomId, user.uid]);
 
             useEffect(() => { lucide.createIcons(); }, [roomState, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, toolsMenuOpen, customTokenModalOpen]);
 
@@ -380,9 +449,8 @@
                 const filter = c => c.instanceId !== card.instanceId;
                 let updates = { battlefieldUpper: (myState.battlefieldUpper || []).filter(filter), battlefieldLower: (myState.battlefieldLower || []).filter(filter), hand: myState.hand.filter(filter), graveyard: myState.graveyard.filter(filter), exile: myState.exile.filter(filter), commandZone: myState.commandZone.filter(filter), library: myState.library.filter(filter) };
                 
-                // --- NEW TOKEN LOGIC: Tokens cease to exist when changing zones (unless moving battlefield->battlefield, which is handled in handleDropOnBattlefield) ---
                 if (card.isToken) {
-                    updateMyState(updates); // Remove from current zone, but don't add to new one.
+                    updateMyState(updates); 
                     return;
                 }
 
@@ -624,7 +692,28 @@
             useEffect(() => { const loadDecks = async () => { const deckCollection = window.collection(window.db, 'users', user.uid, 'decks'); const snapshot = await window.getDocs(deckCollection); setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }; loadDecks(); const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => { setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }); const cleanupInterval = setInterval(async () => { const now = Date.now(); const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection()); roomsSnapshot.docs.forEach(async (docSnap) => { const data = docSnap.data(); if (data.emptyAt && data.emptyAt <= now) await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id)); }); }, 10000); return () => { unsubscribe(); clearInterval(cleanupInterval); }; }, []);
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
             const createRoom = async () => { if (!selectedDeck) { alert("Select a deck first"); return; } const roomRef = await window.addDoc(window.getPublicRoomCollection(), { host: user.uid, hostName: user.displayName || user.email.split('@')[0], players: [user.uid], createdAt: Date.now(), gameState: {}, emptyAt: null, playerDecks: { [user.uid]: selectedDeck } }); setCurrentRoomId(roomRef.id); setView('game'); };
-            const joinRoom = async (roomId) => { if (!selectedDeck) { alert("Select a deck first"); return; } const roomRef = window.doc(window.getPublicRoomCollection(), roomId); const room = rooms.find(r => r.id === roomId); await window.updateDoc(roomRef, { players: [room.players[0], user.uid], emptyAt: null, [`playerDecks.${user.uid}`]: selectedDeck }); setCurrentRoomId(roomId); setView('game'); };
+            
+            // JOIN ROOM (FIXED SAFE ARRAY HANDLING)
+            const joinRoom = async (roomId) => { 
+                if (!selectedDeck) { alert("Select a deck first"); return; } 
+                
+                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                const room = rooms.find(r => r.id === roomId);
+                
+                // Safer existing player check
+                const currentPlayers = room.players || [];
+                const newPlayers = currentPlayers.includes(user.uid) ? currentPlayers : [...currentPlayers, user.uid];
+
+                await window.updateDoc(roomRef, { 
+                    players: newPlayers, 
+                    emptyAt: null, 
+                    [`playerDecks.${user.uid}`]: selectedDeck 
+                }); 
+                
+                setCurrentRoomId(roomId); 
+                setView('game'); 
+            };
+
             const deleteRoom = async (roomId, e) => { e.stopPropagation(); if(!confirm("Delete room?")) return; await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId)); };
             const clearMyRooms = async () => { if(!confirm("Close ALL your rooms?")) return; const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid)); const snapshot = await window.getDocs(q); snapshot.forEach(async (docSnap) => await window.deleteDoc(docSnap.ref)); };
             const leaveGame = async () => { if (currentRoomId) { const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId); const roomSnap = await window.getDocs(window.query(window.getPublicRoomCollection(), window.where('__name__', '==', currentRoomId))); if (!roomSnap.empty) { const roomData = roomSnap.docs[0].data(); const remainingPlayers = roomData.players.filter(p => p !== user.uid); if (remainingPlayers.length === 0) await window.updateDoc(roomRef, { players: [], emptyAt: Date.now() + ROOM_TIMEOUT_MS }); else await window.updateDoc(roomRef, { players: remainingPlayers, emptyAt: null }); } } setView('lobby'); setCurrentRoomId(null); };
