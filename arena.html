@@ -44,7 +44,7 @@
         @keyframes pulse-warning { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .timer-warning { animation: pulse-warning 1s ease-in-out infinite; }
         
-        /* Counter Styles (NEU) */
+        /* Counter Styles */
         .counter-badge {
             position: absolute; font-size: 10px; font-weight: bold;
             width: 20px; height: 20px; border-radius: 50%;
@@ -70,7 +70,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        // Hinzugefügt: serverTimestamp zum Import
+        // Wichtig: serverTimestamp importieren
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where, FieldValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -107,7 +107,6 @@
         window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
 
         // Die fehlerhafte window.firebase-Struktur wurde entfernt.
-        // window.firebase = { firestore: { Timestamp: { now: () => ({ toMillis: () => Date.now() }) }, FieldValue: { arrayUnion: (v) => v, arrayRemove: (v) => v } } };
 
         const renderAuthCheck = () => {
              onAuthStateChanged(auth, (user) => {
@@ -140,7 +139,7 @@
         const generateId = () => Math.random().toString(36).substring(2, 9);
         const ROOM_TIMEOUT_MS = 180000;
 
-        // --- CONSTANTS FOR TOKENS AND COUNTERS (NEU) ---
+        // --- CONSTANTS FOR TOKENS AND COUNTERS ---
         const COMMON_TOKENS = [
             { name: 'Treasure', pt: '0/0', type: 'Artifact Token', image_url: 'https://cards.scryfall.io/large/front/6/e/6e84d47b-83f8-41f4-90f9-81335b8f2f53.jpg' },
             { name: 'Food', pt: '0/0', type: 'Artifact Token', image_url: 'https://cards.scryfall.io/large/front/b/f/bf36408d-ed85-497f-8e68-d3a922c388a0.jpg' },
@@ -209,7 +208,7 @@
         const CardImage = ({ src, card, className, style, onClick, onContextMenu, onMouseEnter, onMouseLeave, isBack = false }) => {
             const imageSrc = isBack ? 'https://upload.wikimedia.org/wikipedia/en/a/aa/Magic_the_gathering-card-back.jpg' : src;
             
-            // Render Counters (NEU)
+            // Render Counters
             const counters = card?.counters || {};
             const plus1 = counters.plus1 || 0;
             const minus1 = counters.minus1 || 0;
@@ -227,7 +226,7 @@
                     <img src={imageSrc} alt={card?.name || 'Card'} className="w-full h-full object-cover select-none pointer-events-none" />
                     {!isBack && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 pointer-events-none"></div>}
                     
-                    {/* Counter Badges (NEU) */}
+                    {/* Counter Badges */}
                     {!isBack && plus1 > 0 && <div className="counter-badge counter-plus" title="+1/+1 Counter">+{plus1}</div>}
                     {!isBack && minus1 > 0 && <div className="counter-badge counter-minus" title="-1/-1 Counter">-{minus1}</div>}
                     {!isBack && loyalty > 0 && <div className="counter-badge counter-loyalty" title="Loyalty">{loyalty}</div>}
@@ -276,6 +275,7 @@
 
             const tokens = useMemo(() => [
                 ...COMMON_TOKENS,
+                { name: 'Copy', pt: 'N/A', type: 'Token', image_url: 'https://cards.scryfall.io/large/front/4/f/4f4931ce-18f3-4fac-b8c7-99ea78f4019a.jpg' }, // Sicherstellen, dass Copy nicht am Ende ist, falls wir 'Custom' später hinzufügen.
                 { name: 'Custom', pt: 'N/A', type: 'Custom Token', image_url: '' }
             ], []);
 
@@ -492,7 +492,7 @@
                     const roomList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
                     const now = Date.now();
-                    const freshRooms = roomList.filter(room => !room.emptyAt || (now - room.emptyAt < ROOM_TIMEOUT_MS));
+                    const freshRooms = roomList.filter(room => !room.emptyAt || (now - (room.emptyAt.toMillis ? room.emptyAt.toMillis() : room.emptyAt.seconds * 1000) < ROOM_TIMEOUT_MS));
 
                     setRooms(freshRooms.sort((a, b) => (b.players?.length || 0) - (a.players?.length || 0)));
                     setLoading(false);
@@ -518,7 +518,7 @@
                         host: user.uid,
                         players: [user.uid],
                         active: true,
-                        // FIX: Changed to use window.serverTimestamp()
+                        // FIX: Nutzt jetzt window.serverTimestamp()
                         createdAt: window.serverTimestamp(),
                         lastActive: window.serverTimestamp(),
                         gameState: {}
@@ -527,7 +527,7 @@
                     onStartGame(newRoomRef.id);
                 } catch (e) {
                     console.error("Error creating room:", e);
-                    setError("Failed to create room.");
+                    setError("Failed to create room: " + e.message); // Detailliertere Fehlermeldung
                 } finally {
                     setCreating(false);
                 }
@@ -542,7 +542,7 @@
                 try {
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     await window.updateDoc(roomRef, {
-                        // FIX: Changed to use window.FieldValue
+                        // FIX: Nutzt jetzt window.FieldValue.arrayUnion
                         players: window.FieldValue.arrayUnion(user.uid),
                         lastActive: window.serverTimestamp()
                     });
@@ -558,7 +558,7 @@
                 try {
                     const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                     await window.updateDoc(roomRef, {
-                        // FIX: Changed to use window.FieldValue
+                        // FIX: Nutzt jetzt window.FieldValue.arrayRemove
                         players: window.FieldValue.arrayRemove(user.uid),
                         emptyAt: window.serverTimestamp()
                     });
@@ -568,7 +568,8 @@
             };
 
             const userRooms = rooms.filter(r => r.players.includes(user.uid));
-            const availableRooms = rooms.filter(r => !r.players.includes(user.uid) && r.players.length < 2);
+            // Wir filtern jetzt nach Räumen mit weniger als 2 Spielern und die nicht gerade schließen
+            const availableRooms = rooms.filter(r => !r.players.includes(user.uid) && r.players.length < 2 && !r.emptyAt);
 
             return (
                 <div className="flex-grow overflow-y-auto p-6 scrollbar-thin">
@@ -671,7 +672,7 @@
                                                      ) : (
                                                          <button 
                                                             onClick={() => joinRoom(room.id)}
-                                                            disabled={!selectedDeck || !!room.emptyAt}
+                                                            disabled={!selectedDeck}
                                                             className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded"
                                                         >
                                                              Join
@@ -702,7 +703,7 @@
             const [hoveredCard, setHoveredCard] = useState(null);
             const [topCardView, setTopCardView] = useState(null);
             const [leaveGameModal, setLeaveGameModal] = useState(false);
-            const [tokenModalOpen, setTokenModalOpen] = useState(false); // NEU: Token Modal State
+            const [tokenModalOpen, setTokenModalOpen] = useState(false);
             
             const playerUpperBattlefieldRef = useRef(null);
             const playerLowerBattlefieldRef = useRef(null);
@@ -786,7 +787,7 @@
             const shuffle = () => { /* ... */ }; // Placeholder
             const drawCard = () => { /* ... */ }; // Placeholder
 
-            // --- TOKEN/COUNTER LOGIC (NEU) ---
+            // --- TOKEN/COUNTER LOGIC ---
             const addToken = (tokenData) => {
                 const newCard = {
                     ...tokenData,
@@ -839,8 +840,8 @@
                 const targetZone = card.isCommander ? 'commandZone' : (card.x ? 'battlefieldLower' : 'battlefieldUpper');
                 
                 const counterOptions = COUNTER_OPTIONS.filter(opt => opt.key !== 'destroy' && opt.key !== 'tapped' && opt.key !== 'hand' && opt.key !== 'graveyard' && opt.key !== 'exile').flatMap(opt => [
-                    { label: `+ ${opt.label}`, action: () => updateCardCounters(card, targetZone, opt.key, 1) },
-                    { label: `- ${opt.label}`, action: () => updateCardCounters(card, targetZone, opt.key, -1) },
+                    { label: `+ ${opt.label.split(' ')[0]}`, action: () => updateCardCounters(card, targetZone, opt.key, 1) },
+                    { label: `- ${opt.label.split(' ')[0]}`, action: () => updateCardCounters(card, targetZone, opt.key, -1) },
                 ]);
 
                 const options = [
@@ -937,10 +938,11 @@
             const [currentRoomId, setCurrentRoomId] = useState(null);
             const [view, setView] = useState('lobby'); 
 
-            // FIX 1 & 2: Lucide Icons müssen nach jedem Rendern neu erstellt werden
+            // FIX 1: Lucide Icons einmalig nach dem ersten Render erstellen
+            // Dies behebt den "Invalid hook call" Fehler, der durch den Aufruf in jedem Renderzyklus verursacht werden konnte.
             useEffect(() => {
                 lucide.createIcons();
-            });
+            }, []); // Leeres Array sorgt dafür, dass es nur einmal läuft.
 
             const handleSelectDeck = (deckOrAction) => {
                 if (deckOrAction === 'open_manager') {
@@ -984,8 +986,7 @@
         };
         
         // --- LUCIDE ICON INITIALIZATION ---
-        // Der fehlerhafte Aufruf wurde in die App-Komponente verschoben.
-
+        // Der fehlerhafte, doppelte Aufruf wurde entfernt.
 
     </script>
 </body>
