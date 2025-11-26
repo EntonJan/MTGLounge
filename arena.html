@@ -388,7 +388,7 @@
                 return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
             }
 
-            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
+            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : roomState?.player2Name || 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
             const currentTurnId = roomState?.currentTurn;
             const phase = roomState?.phase || 'mulligan';
@@ -460,14 +460,16 @@
                     
                     {/* Upper Battlefield (Opponent's) */}
                     <div ref={playerUpperBattlefieldRef} className="absolute top-0 left-0 w-full h-1/2 overflow-hidden border-b border-gray-700 bg-gray-800/50" onDragOver={e => e.preventDefault()} onDrop={e => handleDropOnBattlefield(e, 'upper')}>
-                        {/* FIX: Replaced dead image URL with stable Scryfall Commander Art */}
+                        {/* Fix from previous interaction: Replaced dead image URL with stable Scryfall Commander Art */}
                         <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://cards.scryfall.io/large/front/d/2/d248b644-ee7f-4433-87f5-2d7a1262d4b8.jpg")', backgroundSize: '150px'}}></div>
-                        {(opponentState.battlefieldUpper || []).map(card => (
+                        
+                        {/* FIX: Use optional chaining or fallback array for opponentState zones */}
+                        {(opponentState?.battlefieldUpper || []).map(card => (
                             <div key={card.instanceId} className={`absolute cursor-pointer`} style={{ left: card.x, top: card.y }}>
                                 <CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} opacity-80`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} />
                             </div>
                         ))}
-                        {(opponentState.battlefieldLower || []).map(card => (
+                        {(opponentState?.battlefieldLower || []).map(card => (
                             <div key={card.instanceId} className={`absolute cursor-pointer`} style={{ left: card.x, top: card.y }}>
                                 <CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} opacity-80`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} />
                             </div>
@@ -476,7 +478,7 @@
 
                     {/* Lower Battlefield (My Own) */}
                     <div ref={playerLowerBattlefieldRef} className="absolute bottom-0 left-0 w-full h-1/2 overflow-hidden bg-gray-900/50" onDragOver={e => e.preventDefault()} onDrop={e => handleDropOnBattlefield(e, 'lower')}>
-                        {/* FIX: Replaced dead image URL with stable Scryfall Commander Art and rotated */}
+                        {/* Fix from previous interaction: Replaced dead image URL with stable Scryfall Commander Art and rotated */}
                         <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://cards.scryfall.io/large/front/d/2/d248b644-ee7f-4433-87f5-2d7a1262d4b8.jpg")', backgroundSize: '150px', transform: 'rotate(180deg)'}}></div>
                         {/* Player's Upper Zone - Lands/Non-Creatures */}
                         {(myState.battlefieldUpper || []).map(card => (
@@ -530,15 +532,38 @@
                                 </h4>
                                 {startingPlayerId === opponentId && <Coin />}
                             </div>
+                            {/* FIX: Use optional chaining for opponentState accesses in sidebar */}
                             <div className="text-white text-sm space-y-1">
-                                <div>Life: <span className="text-green-400 font-bold text-lg">{opponentState.life}</span></div>
-                                <div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState.commanderDamage || 0}</span></div>
+                                <div>Life: <span className="text-green-400 font-bold text-lg">{opponentState?.life || 40}</span></div>
+                                <div>Cmd Dmg: <span className="text-red-400 font-bold">{opponentState?.commanderDamage || 0}</span></div>
                             </div>
                         </div>
-                        {opponentState.commandZone?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg"><h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4><div className="flex flex-wrap gap-2 content-start">{opponentState.commandZone.map(card => (<div key={card.instanceId} className="flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 border border-yellow-500 flex-shrink-0" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div></div>)}
-                        {opponentState.graveyard?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg"><h4 className="text-red-400 text-sm font-bold flex justify-between">Graveyard ({opponentState.graveyard.length})</h4><div className="flex mt-1 space-x-2"><CardImage src={opponentState.graveyard[0].image_url} className="w-16 h-20 border border-red-400" onMouseEnter={() => setHoveredCard(opponentState.graveyard[0].image_url)} onMouseLeave={() => setHoveredCard(null)} /></div></div>)}
-                        {opponentState.exile?.length > 0 && (<div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg"><h4 className="text-red-400 text-sm font-bold flex justify-between">Exile ({opponentState.exile.length})</h4><div className="flex mt-1 space-x-2"><CardImage src={opponentState.exile[0].image_url} className="w-16 h-20 border border-red-400" onMouseEnter={() => setHoveredCard(opponentState.exile[0].image_url)} onMouseLeave={() => setHoveredCard(null)} /></div></div>)}
-                        <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg"><h4 className="text-red-400 text-sm font-bold">Library ({opponentState.library.length})</h4><div className="flex mt-1 space-x-2"><CardImage isBack={true} className="w-16 h-20 border border-red-400" /></div></div>
+                        <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 overflow-hidden flex flex-col shadow-lg">
+                            <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
+                            {/* FIX: Use optional chaining or fallback array */}
+                            <div className="flex flex-wrap gap-2 content-start">{(opponentState?.commandZone || []).map(card => (<div key={card.instanceId} className="flex flex-col items-center"><CardImage src={card.image_url} className="w-12 h-16 border border-yellow-500 flex-shrink-0" onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} /></div>))}</div>
+                        </div>
+                        <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
+                            {/* FIX: Use optional chaining for opponentState accesses in sidebar */}
+                            <h4 className="text-red-400 text-sm font-bold flex justify-between">Graveyard ({opponentState?.graveyard?.length || 0})</h4>
+                            <div className="flex mt-1 space-x-2">
+                                {/* FIX: Use optional chaining */}
+                                {opponentState?.graveyard?.length > 0 && <CardImage src={opponentState.graveyard[0].image_url} className="w-16 h-20 border border-red-400" onMouseEnter={() => setHoveredCard(opponentState.graveyard[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />}
+                            </div>
+                        </div>
+                        <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
+                            {/* FIX: Use optional chaining for opponentState accesses in sidebar */}
+                            <h4 className="text-red-400 text-sm font-bold flex justify-between">Exile ({opponentState?.exile?.length || 0})</h4>
+                            <div className="flex mt-1 space-x-2">
+                                {/* FIX: Use optional chaining */}
+                                {opponentState?.exile?.length > 0 && <CardImage src={opponentState.exile[0].image_url} className="w-16 h-20 border border-red-400" onMouseEnter={() => setHoveredCard(opponentState.exile[0].image_url)} onMouseLeave={() => setHoveredCard(null)} />}
+                            </div>
+                        </div>
+                        <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-3 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
+                            {/* FIX: Use optional chaining for opponentState accesses in sidebar */}
+                            <h4 className="text-red-400 text-sm font-bold">Library ({opponentState?.library?.length || '?'})</h4>
+                            <div className="flex mt-1 space-x-2"><CardImage isBack={true} className="w-16 h-20 border border-red-400" /></div>
+                        </div>
                     </div>
 
                     {/* Right Sidebar (My Own) */}
@@ -678,7 +703,7 @@
                     {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>} 
                     {libraryMenu && <ContextMenu x={libraryMenu.x} y={libraryMenu.y} onClose={() => setLibraryMenu(null)} options={[ { label: 'Draw Card', action: drawCard }, { label: 'Look at Top Card', action: () => { if(myState.library.length>0) setTopCardView(myState.library[0]); } }, { label: 'Shuffle Library', action: shuffleLibrary }, { label: 'View Entire Library', action: () => setViewingZone('library') } ]} /> } 
                     {cardContextMenu && <ContextMenu x={cardContextMenu.x} y={cardContextMenu.y} onClose={() => setCardContextMenu(null)} options={cardContextMenu.options} />} 
-                    {topCardView && <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library"><div className="flex flex-col items-center gap-4"><img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" /><div className="flex gap-4"><button onClick={() => { setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button><button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button><button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button></div></div></Modal>} 
+                    {topCardView && <Modal isOpen={true} onClose={() => setTopCardView(null)} title="Top of Library"><div className="flex flex-col items-center gap-4"><img src={topCardView.image_url} className="w-48 rounded-xl shadow-lg" /><div className="flex gap-4"><button onClick={() => { moveCardToZone(topCardView, 'library_top'); setTopCardView(null); }} className="bg-blue-600 px-4 py-2 rounded text-white">Keep on Top</button><button onClick={() => { moveCardToZone(topCardView, 'library_bottom'); setTopCardView(null); }} className="bg-yellow-600 px-4 py-2 rounded text-white">Put on Bottom</button><button onClick={() => { playCard(topCardView, 'library_top', 'lower'); setTopCardView(null); }} className="bg-green-600 px-4 py-2 rounded text-white">Play</button></div></div></Modal>} 
                     {viewingZone && <Modal isOpen={true} onClose={() => setViewingZone(null)} title={`Viewing ${viewingZone.charAt(0).toUpperCase() + viewingZone.slice(1)}`}>
                         <div className="grid grid-cols-4 gap-4">
                             {myState[viewingZone]?.map((card, idx) => (
