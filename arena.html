@@ -57,7 +57,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        // HINWEIS: arrayUnion/arrayRemove sind nicht in deinen Imports, also lasse ich sie weg und halte mich an deine Logik.
         import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -266,7 +265,7 @@
                 }
             }, [roomState, loading, user.uid, roomId]);
 
-            // Initialize Player State
+            // --- START FIX: Player Init Logic ---
             useEffect(() => {
                 if (loading || !roomState) return;
                 const myId = user.uid;
@@ -294,12 +293,17 @@
                     graveyard: [], exile: [], commandZone: commander
                 };
 
-                window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), {
-                    gameState: { [myId]: initialPlayerState }
-                }, { merge: true })
+                // FIX: Verwende updateDoc mit "dot notation", um Race Conditions zu verhindern
+                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), {
+                    [`gameState.${myId}`]: initialPlayerState // Dies fügt den Spieler hinzu, ohne andere zu löschen
+                })
                 .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
-                .catch(e => { initializingRef.current = false; });
+                .catch(e => { 
+                    console.error("Fehler beim Initialisieren des Spielerstatus:", e);
+                    initializingRef.current = false; 
+                });
             }, [roomState, deck, loading]);
+            // --- END FIX ---
 
             useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized]);
 
@@ -319,6 +323,7 @@
                 return !hasDrawn && !hasPlayed;
             }, [myState, deck]);
 
+            // DIES IST DER "SYNCING..." CHECK
             if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
 
             const updateMyState = (updates) => {
@@ -452,11 +457,15 @@
             const saveMatchToTrackers = async (winnerId) => {
                 try {
                     const myDeckColors = extractDeckColors(deck);
+                    // HINWEIS: roomState.playerDecks enthält jetzt nur Referenzen
+                    // Für eine VOLLSTÄNDIGE Speicherung müsstest du das Deck des Gegners
+                    // aus 'users/{opponentId}/decks/{deckId}' laden.
+                    // Fürs Erste verwenden wir die Infos aus der Referenz.
                     const opponentDeckData = roomState.playerDecks?.[opponentId];
-                    const opponentDeckColors = extractDeckColors(opponentDeckData);
-
+                    const opponentDeckColors = []; // Unbekannt, da wir nur Referenz haben
+                    
                     const myDeckName = deck.name || 'Unknown Deck';
-                    const opponentDeckName = opponentDeckData?.name || 'Opponent Deck';
+                    const opponentDeckName = opponentDeckData?.deckName || 'Opponent Deck';
 
                     const iWon = winnerId === user.uid;
                     const matchData = {
@@ -465,7 +474,7 @@
                         gamesWon: iWon ? 2 : 0,
                         gamesLost: iWon ? 0 : 2,
                         ownDeckColors: myDeckColors,
-                        opponentDeckColors: opponentDeckColors,
+                        opponentDeckColors: opponentDeckColors, // Leer, aber ok
                         result: iWon ? 'Win' : 'Loss',
                         format: 'Commander',
                         timestamp: Date.now(),
@@ -1078,7 +1087,6 @@
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const room = rooms.find(r => r.id === roomId);
                 
-                // Wir behalten deine Logik zum Hinzufügen von Spielern bei
                 await window.updateDoc(roomRef, { 
                     players: [room.players[0], user.uid],
                     emptyAt: null,
