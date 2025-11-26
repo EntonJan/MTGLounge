@@ -93,7 +93,7 @@
         window.updateDoc = updateDoc;
         window.query = query;
         window.where = where;
-        window.arrayUnion = arrayUnion; // Added arrayUnion/arrayRemove imports and set to window
+        window.arrayUnion = arrayUnion; 
         window.arrayRemove = arrayRemove;
         window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
 
@@ -285,11 +285,6 @@
 
         // --- GameSim Component (The main game logic) ---
         const GameSim = ({ deck, onLeave, roomId }) => {
-            // ... [LARGE BODY OF GAMESIM COMPONENT LOGIC - UNMODIFIED] ...
-            // This is where you handle state, effects, draws, shuffles, playing cards, etc.
-            // The logic for fetching the opponent's deck based on the *reference* // will need to be added here for a complete solution, but the core
-            // functionality causing the error is in the App component.
-            
             const [roomState, setRoomState] = useState(null);
             const [loading, setLoading] = useState(true);
             const [viewingZone, setViewingZone] = useState(null); 
@@ -465,7 +460,8 @@
                     
                     {/* Upper Battlefield (Opponent's) */}
                     <div ref={playerUpperBattlefieldRef} className="absolute top-0 left-0 w-full h-1/2 overflow-hidden border-b border-gray-700 bg-gray-800/50" onDragOver={e => e.preventDefault()} onDrop={e => handleDropOnBattlefield(e, 'upper')}>
-                        <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://media.wizards.com/2016/images/daily/cm2016_cmdr_logo.png")', backgroundSize: '150px'}}></div>
+                        {/* FIX: Replaced dead image URL with stable Scryfall Commander Art */}
+                        <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://cards.scryfall.io/large/front/d/2/d248b644-ee7f-4433-87f5-2d7a1262d4b8.jpg")', backgroundSize: '150px'}}></div>
                         {(opponentState.battlefieldUpper || []).map(card => (
                             <div key={card.instanceId} className={`absolute cursor-pointer`} style={{ left: card.x, top: card.y }}>
                                 <CardImage src={card.image_url} counters={card.counters} className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} opacity-80`} onMouseEnter={() => setHoveredCard(card.image_url)} onMouseLeave={() => setHoveredCard(null)} />
@@ -480,7 +476,8 @@
 
                     {/* Lower Battlefield (My Own) */}
                     <div ref={playerLowerBattlefieldRef} className="absolute bottom-0 left-0 w-full h-1/2 overflow-hidden bg-gray-900/50" onDragOver={e => e.preventDefault()} onDrop={e => handleDropOnBattlefield(e, 'lower')}>
-                        <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://media.wizards.com/2016/images/daily/cm2016_cmdr_logo.png")', backgroundSize: '150px', transform: 'rotate(180deg)'}}></div>
+                        {/* FIX: Replaced dead image URL with stable Scryfall Commander Art and rotated */}
+                        <div className="absolute inset-0 bg-repeat opacity-5" style={{backgroundImage: 'url("https://cards.scryfall.io/large/front/d/2/d248b644-ee7f-4433-87f5-2d7a1262d4b8.jpg")', backgroundSize: '150px', transform: 'rotate(180deg)'}}></div>
                         {/* Player's Upper Zone - Lands/Non-Creatures */}
                         {(myState.battlefieldUpper || []).map(card => (
                             <div key={card.instanceId} className="absolute cursor-pointer" style={{ left: card.x, top: card.y }} draggable onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')} onContextMenu={(e) => openCardContextMenu(e, card, 'battlefieldUpper')}>
@@ -614,7 +611,6 @@
                     </div>
 
                     {/* Modals and Context Menus */}
-                    {/* ... (Modal implementations for Token Selector, Leave Game, Hovered Card, etc.) ... */}
                     {tokenSelectorModalOpen && <Modal isOpen={true} onClose={() => setTokenSelectorModalOpen(false)} title="Create Token / Counter">
                         <div className="flex space-x-4">
                             <div className="flex-shrink-0 w-40 flex flex-col space-y-2">
@@ -745,7 +741,7 @@
                 return () => unsubscribe(); 
             }, [user.uid]);
             
-            // --- START OF FIX: createRoom function updated to use deckReference ---
+            // --- FIX 1: createRoom function updated to use deckReference ---
             const createRoom = async () => {
                 if (!selectedDeck) { alert("Please select a deck first."); return; }
                 
@@ -776,7 +772,7 @@
                 }
             };
             
-            // --- START OF FIX: joinRoom function updated to use deckReference (Fixes your reported error) ---
+            // --- FIX 1: joinRoom function updated to use deckReference (Fixes your reported error) ---
             const joinRoom = async (roomId) => {
                 if (!selectedDeck) { alert("Please select a deck first."); return; }
                 
@@ -801,7 +797,7 @@
                     alert("Fehler beim Beitreten des Raums. Bitte versuchen Sie es erneut.");
                 }
             };
-            // --- END OF FIX ---
+            // --- END OF FIX 1 ---
             
             const deleteRoom = async (roomId, e) => { 
                 e.stopPropagation(); 
