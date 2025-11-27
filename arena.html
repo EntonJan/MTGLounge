@@ -691,24 +691,28 @@
             const [view, setView] = useState('lobby'); const [selectedDeck, setSelectedDeck] = useState(null); const [decks, setDecks] = useState([]); const [rooms, setRooms] = useState([]); const [currentRoomId, setCurrentRoomId] = useState(null);
             useEffect(() => { const loadDecks = async () => { const deckCollection = window.collection(window.db, 'users', user.uid, 'decks'); const snapshot = await window.getDocs(deckCollection); setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }; loadDecks(); const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => { setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() }))); }); const cleanupInterval = setInterval(async () => { const now = Date.now(); const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection()); roomsSnapshot.docs.forEach(async (docSnap) => { const data = docSnap.data(); if (data.emptyAt && data.emptyAt <= now) await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id)); }); }, 10000); return () => { unsubscribe(); clearInterval(cleanupInterval); }; }, []);
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
-            const createRoom = async () => { if (!selectedDeck) { alert("Select a deck first"); return; } const roomRef = await window.addDoc(window.getPublicRoomCollection(), { host: user.uid, hostName: user.displayName || user.email.split('@')[0], players: [user.uid], createdAt: Date.now(), gameState: {}, emptyAt: null, playerDecks: { [user.uid]: selectedDeck } }); setCurrentRoomId(roomRef.id); setView('game'); };
+const createRoom = async () => { if (!selectedDeck) { alert("Select a deck first"); return; } const roomRef = await window.addDoc(window.getPublicRoomCollection(), { host: user.uid, hostName: user.displayName || user.email.split('@')[0], players: [user.uid], createdAt: Date.now(), gameState: {}, emptyAt: null, playerDeckIds: { [user.uid]: selectedDeck.id } }); setCurrentRoomId(roomRef.id); setView('game'); };
             
-            // JOIN ROOM (FIXED SAFE ARRAY HANDLING)
-            const joinRoom = async (roomId) => { 
-                if (!selectedDeck) { alert("Select a deck first"); return; } 
-                
-                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
-                const room = rooms.find(r => r.id === roomId);
-                
-                // Safer existing player check
-                const currentPlayers = room.players || [];
-                const newPlayers = currentPlayers.includes(user.uid) ? currentPlayers : [...currentPlayers, user.uid];
+// JOIN ROOM (FIXED - Only stores deck ID, not full deck object)
+const joinRoom = async (roomId) => { 
+    if (!selectedDeck) { alert("Select a deck first"); return; } 
+    
+    const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+    const room = rooms.find(r => r.id === roomId);
+    
+    // Safer existing player check
+    const currentPlayers = room.players || [];
+    const newPlayers = currentPlayers.includes(user.uid) ? currentPlayers : [...currentPlayers, user.uid];
 
-                await window.updateDoc(roomRef, { 
-                    players: newPlayers, 
-                    emptyAt: null, 
-                    [`playerDecks.${user.uid}`]: selectedDeck 
-                }); 
+    await window.updateDoc(roomRef, { 
+        players: newPlayers, 
+        emptyAt: null, 
+        [`playerDeckIds.${user.uid}`]: selectedDeck.id 
+    }); 
+    
+    setCurrentRoomId(roomId); 
+    setView('game'); 
+};
                 
                 setCurrentRoomId(roomId); 
                 setView('game'); 
@@ -736,3 +740,4 @@
     </script>
 </body>
 </html>
+
