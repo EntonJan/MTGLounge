@@ -43,6 +43,47 @@
         
         @keyframes pulse-warning { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .timer-warning { animation: pulse-warning 1s ease-in-out infinite; }
+        
+        /* Styles for Token/Counter UI */
+        .token-stats {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+        .counter-badge-container {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .counter-badge {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .mana-toggle {
+            width: 24px; height: 24px; border-radius: 50%; display: inline-flex;
+            align-items: center; justify-content: center; font-weight: bold;
+            font-size: 12px; cursor: pointer; transition: all 0.2s;
+        }
     </style>
 </head>
 <body class="h-screen w-screen bg-gray-900 overflow-hidden">
@@ -196,99 +237,93 @@
                 </div>
             );
         };
+        
+        {/* --- NEW: Token Creation Modal --- */}
+        const TokenModal = ({ isOpen, onClose, onCreate }) => {
+            const [name, setName] = useState('Spirit');
+            const [stats, setStats] = useState('1/1');
+            const [quantity, setQuantity] = useState(1);
+            const [colors, setColors] = useState(['W']);
+
+            const toggleColor = (c) => {
+                setColors(prev => 
+                    prev.includes(c) ? prev.filter(col => col !== c) : [...prev, c]
+                );
+            };
+
+            const handleSubmit = () => {
+                onCreate({
+                    name,
+                    stats,
+                    quantity: parseInt(quantity, 10) || 1,
+                    colors
+                });
+                onClose();
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="Create Token">
+                    <div className="flex flex-col gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Token Name</label>
+                            <input type="text" value={name} onChange={e => setName(e.target.value)} className="bg-gray-700 border border-gray-600 p-2 rounded w-full text-white" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Stats (P/T)</label>
+                                <input type="text" value={stats} onChange={e => setStats(e.target.value)} className="bg-gray-700 border border-gray-600 p-2 rounded w-full text-white" placeholder="e.g., 1/1" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Quantity</label>
+                                <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} min="1" className="bg-gray-700 border border-gray-600 p-2 rounded w-full text-white" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Colors</label>
+                            <div className="flex gap-2">
+                                {['W', 'U', 'B', 'R', 'G'].map(c => (
+                                    <button 
+                                        key={c}
+                                        onClick={() => toggleColor(c)}
+                                        className={`mana-toggle ${
+                                            c === 'W' ? 'bg-mtg-w text-black' : 
+                                            c === 'U' ? 'bg-mtg-u text-white' : 
+                                            c === 'B' ? 'bg-mtg-b text-white' : 
+                                            c === 'R' ? 'bg-mtg-r text-white' : 
+                                            'bg-mtg-g text-white'
+                                        } ${colors.includes(c) ? 'ring-2 ring-yellow-400' : 'opacity-50'}`}
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg transition-colors w-full mt-4">
+                            Create {quantity} Token(s)
+                        </button>
+                    </div>
+                </Modal>
+            );
+        };
 
         const ContextMenu = ({ x, y, options, onClose }) => {
             return (
                 <div className="fixed z-[200] bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[150px]" style={{ left: x, top: y }} onMouseLeave={onClose}>
                     {options.map((opt, i) => (
-                        <button key={i} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
+                        <button 
+                            key={i} 
+                            onClick={() => { opt.action(); onClose(); }} 
+                            className={`block w-full text-left px-4 py-2 text-sm text-white ${opt.label.startsWith('---') ? 'text-gray-500 text-center' : 'hover:bg-gray-700'}`}
+                            disabled={opt.label.startsWith('---')}
+                        >
                             {opt.label}
                         </button>
                     ))}
-                </div>
-            );
-        };
-        
-        const CardContextMenu = ({ x, y, card, battlefield, onClose, onUpdateCounters, onMoveToZone, onToggleTap }) => {
-            const tapLabel = card.isTapped ? 'Untap' : 'Tap';
-            
-            // Helper to generate a counter option set
-            const counterOptions = (type, label) => [
-                { label: `${label} (+1)`, action: () => onUpdateCounters(card.instanceId, battlefield, type, 1) },
-                { label: `${label} (-1)`, action: () => onUpdateCounters(card.instanceId, battlefield, type, -1) },
-            ];
-            
-            const allOptions = [
-                { label: tapLabel, action: () => onToggleTap(card.instanceId, battlefield) },
-                
-                { label: '--- Counters (+1/+1) ---', isSeparator: true },
-                ...counterOptions('plus1', '+1/+1 Counter'),
-                
-                { label: '--- Counters (-1/-1) ---', isSeparator: true },
-                ...counterOptions('minus1', '-1/-1 Counter'),
-                
-                { label: '--- Generic Counters ---', isSeparator: true },
-                ...counterOptions('generic', 'Generic Counter'),
-                
-                { label: '--- Move ---', isSeparator: true },
-                { label: 'Move to Hand', action: () => onMoveToZone(card, 'hand') },
-                { label: 'Move to Graveyard', action: () => onMoveToZone(card, 'graveyard') },
-                { label: 'Move to Exile', action: () => onMoveToZone(card, 'exile') },
-                { label: 'Move to Library Top', action: () => onMoveToZone(card, 'library_top') },
-                { label: 'Move to Library Bottom', action: () => onMoveToZone(card, 'library_bottom') },
-            ];
-
-            return (
-                <div className="fixed z-[200] bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[200px] max-w-[200px] overflow-auto" style={{ left: x, top: y }} onMouseLeave={onClose}>
-                    <div className="px-4 py-2 text-sm text-yellow-400 font-bold border-b border-gray-700 truncate" title={card.name}>{card.name}</div>
-                    {allOptions.map((opt, i) => (
-                        <React.Fragment key={i}>
-                            {opt.isSeparator ? (
-                                <div className="text-gray-500 text-[10px] uppercase font-semibold px-4 pt-2 pb-1">{opt.label.replace(/---/g, '').trim()}</div>
-                            ) : (
-                                <button key={opt.label} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
-                                    {opt.label}
-                                </button>
-                            )}
-                        </React.Fragment>
-                    ))}
-                </div>
-            );
-        };
-        
-        const CounterDisplay = ({ counters }) => {
-            const counterElements = [];
-            
-            Object.keys(counters).forEach(type => {
-                const count = counters[type];
-                if (count > 0) {
-                    let color = 'bg-gray-500';
-                    let label = type.substring(0, 1).toUpperCase(); 
-
-                    if (type === 'plus1') {
-                        color = 'bg-green-600';
-                        label = `+${count}`;
-                    } else if (type === 'minus1') {
-                        color = 'bg-red-600';
-                        label = `-${count}`;
-                    } else { // Generic
-                         color = 'bg-yellow-600';
-                         label = count;
-                    }
-                    
-                    counterElements.push(
-                        <div key={type} className={`w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center shadow-lg ${color} border border-white/50`} title={`${count} ${type.replace(/([A-Z])/g, ' $1').toLowerCase()} counters`}>
-                            {label}
-                        </div>
-                    );
-                }
-            });
-
-            if (counterElements.length === 0) return null;
-            
-            return (
-                <div className="absolute top-1 left-1 flex flex-col gap-1 z-30 pointer-events-none">
-                    {counterElements}
                 </div>
             );
         };
@@ -310,10 +345,13 @@
             const [topCardView, setTopCardView] = useState(null);
             const [myHandMinimized, setMyHandMinimized] = useState(false);
             const [oppHandMinimized, setOppHandMinimized] = useState(false);
-            const [contextMenu, setContextMenu] = useState(null); // New state for card context menu
             
             const [leaveGameModal, setLeaveGameModal] = useState(false);
             const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
+            
+            {/* --- NEW: State for new modals --- */}
+            const [isTokenModalOpen, setTokenModalOpen] = useState(false);
+            const [cardMenu, setCardMenu] = useState(null); {/* { x, y, card, zone } */}
 
             const playerLowerBattlefieldRef = useRef(null);
             const playerUpperBattlefieldRef = useRef(null);
@@ -362,14 +400,13 @@
                 console.log("Initializing Player...");
                 initializingRef.current = true;
                 
-                // Initialize cards with counters: {}
-                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: {} }));
+                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
                 for (let i = initLibrary.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]];
                 }
                 const startingHand = initLibrary.splice(0, 7);
-                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: {} }] : [];
+                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: [] }] : [];
 
                 const initialPlayerState = {
                     life: 40, commanderDamage: 0, cmdTax: 0,
@@ -385,23 +422,21 @@
                 .catch(e => { initializingRef.current = false; });
             }, [roomState, deck, loading]);
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, contextMenu]);
+            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, isTokenModalOpen, cardMenu]);
 
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
-            const opponentPlayer = roomState?.playerDecks?.[opponentId];
-            const opponentName = opponentPlayer?.name || 'Opponent';
+            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
 
             // Mulligan Visibility Logic
             const showMulligan = useMemo(() => {
                 if (!myState) return false;
-                // Only show mulligan if player hasn't played a card or drawn an extra card
                 const initialSize = deck.cards.length;
                 const currentLibSize = myState.library.length;
                 const hasDrawn = currentLibSize < (initialSize - 7);
-                const hasPlayed = (myState.battlefieldUpper?.length || 0) > 0 || (myState.battlefieldLower?.length || 0) > 0 || (myState.graveyard?.length || 0) > 0 || (myState.exile?.length || 0) > 0;
+                const hasPlayed = (myState.battlefieldUpper?.length || 0) > 0 || (myState.battlefieldLower?.length || 0) > 0 || (myState.graveyard?.length || 0) > 0;
                 return !hasDrawn && !hasPlayed;
             }, [myState, deck]);
 
@@ -447,13 +482,11 @@
                 if (x === undefined || y === undefined) {
                     const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
                     const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
-                    // Slightly random position for new cards
                     x = bfWidth - 360 - (Math.random() * 50); 
                     y = (bfHeight / 2) - 60 + (Math.random() * 50); 
                 }
 
-                // Initialize counters if missing, otherwise keep existing for moved cards
-                const newCard = { ...card, isTapped: false, x, y, counters: card.counters || {} }; 
+                const newCard = { ...card, isTapped: false, x, y, counters: card.counters || [] };
                 let updates = {};
                 
                 if (targetBattlefield === 'upper') {
@@ -475,30 +508,96 @@
 
                 updateMyState(updates);
             };
-            
-            const createToken = () => {
-                const defaultToken = {
-                    id: generateId(), 
-                    instanceId: generateId(),
-                    name: "Token (1/1 Saproling)",
-                    image_url: "https://c1.scryfall.com/file/scryfall-cards/normal/front/1/7/17d0d0f4-5f15-40b9-be1a-d4c39af31f47.jpg?1562947158", // Generic Saproling token
-                    type_line: "Creature — Saproling",
-                    power: "1",
-                    toughness: "1",
-                    isToken: true,
-                    isTapped: false,
-                    counters: {}
-                };
-                
-                // Place it directly on the lower battlefield
+
+            {/* --- NEW: Token Creation Function --- */}
+            const createTokens = ({ name, stats, quantity, colors }) => {
                 const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
                 const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
-                const x = bfWidth / 2 + (Math.random() * 100) - 50; 
-                const y = bfHeight / 2 + (Math.random() * 50) - 25; 
                 
-                const tokenOnBattlefield = { ...defaultToken, x, y };
+                const newTokens = [];
+                for (let i = 0; i < quantity; i++) {
+                    // Get default play coordinates
+                    let x = bfWidth - 360 - (Math.random() * 50); 
+                    let y = (bfHeight / 2) - 60 + (Math.random() * 50); 
+                    
+                    const placeholderUrl = `https://placehold.co/200x280/444/FFF?text=${encodeURIComponent(name)}\n${encodeURIComponent(stats)}`;
+                    
+                    const token = {
+                        instanceId: generateId(),
+                        name: name,
+                        p_t: stats,
+                        colors: colors,
+                        image_url: placeholderUrl,
+                        isTapped: false,
+                        isToken: true,
+                        counters: [],
+                        x: x,
+                        y: y
+                    };
+                    newTokens.push(token);
+                }
+                
+                updateMyState({
+                    battlefieldLower: [...(myState.battlefieldLower || []), ...newTokens]
+                });
+            };
+            
+            {/* --- NEW: Counter Management Functions --- */}
+            const addCounterToCard = (card, zone, counterType, amount = 1) => {
+                const currentCounters = card.counters || [];
+                const existingCounter = currentCounters.find(c => c.type === counterType);
+                let newCounters;
 
-                updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), tokenOnBattlefield] });
+                if (existingCounter) {
+                    const newCount = existingCounter.count + amount;
+                    if (newCount > 0) {
+                        // Update count
+                        newCounters = currentCounters.map(c => 
+                            c.type === counterType ? { ...c, count: newCount } : c
+                        );
+                    } else {
+                        // Remove counter if count is 0 or less
+                        newCounters = currentCounters.filter(c => c.type !== counterType);
+                    }
+                } else if (amount > 0) {
+                    // Add new counter
+                    newCounters = [...currentCounters, { type: counterType, count: amount }];
+                } else {
+                    return; // Can't remove a counter that doesn't exist
+                }
+                
+                const updatedCard = { ...card, counters: newCounters };
+                
+                // Update the card in its specific zone
+                const bf = (myState[zone] || []).map(c => 
+                    c.instanceId === card.instanceId ? updatedCard : c
+                );
+                
+                updateMyState({ [zone]: bf });
+            };
+
+            const generateCardOptions = (card, zone) => {
+                const keywords = ['Flying', 'Trample', 'Deathtouch', 'Lifelink', 'Haste', 'Vigilance', 'First Strike', 'Double Strike', 'Indestructible', 'Hexproof', 'Menace'];
+                const numericCounters = ['+1/+1', '-1/-1', 'Poison', 'Energy', 'Charge', 'Loyalty'];
+                
+                const allCounterTypes = [...keywords, ...numericCounters];
+                
+                let options = allCounterTypes.map(type => ({
+                    label: `Add ${type}`,
+                    action: () => addCounterToCard(card, zone, type, 1)
+                }));
+                
+                if (card.counters && card.counters.length > 0) {
+                    options.push({ label: '--- Remove ---', action: () => {} });
+                    card.counters.forEach(c => {
+                        options.push({
+                            label: `Remove ${c.type}`,
+                            action: () => addCounterToCard(card, zone, c.type, -1)
+                        });
+                    });
+                }
+                
+                return options;
             };
 
             const moveCardToZone = (card, toZone) => {
@@ -513,18 +612,12 @@
                     library: myState.library.filter(filter)
                 };
 
-                // Remove positional data and counters when moving off battlefield
-                const cardForNewZone = { ...card };
-                delete cardForNewZone.x;
-                delete cardForNewZone.y;
-                if (toZone !== 'command') delete cardForNewZone.counters; // keep counters in command zone
-
-                if (toZone === 'graveyard') updates.graveyard = [cardForNewZone, ...updates.graveyard];
-                else if (toZone === 'exile') updates.exile = [cardForNewZone, ...updates.exile];
-                else if (toZone === 'hand') updates.hand = [...updates.hand, cardForNewZone];
-                else if (toZone === 'command') updates.commandZone = [cardForNewZone, ...updates.commandZone];
-                else if (toZone === 'library_top') updates.library = [cardForNewZone, ...updates.library];
-                else if (toZone === 'library_bottom') updates.library = [...updates.library, cardForNewZone];
+                if (toZone === 'graveyard') updates.graveyard = [card, ...updates.graveyard];
+                else if (toZone === 'exile') updates.exile = [card, ...updates.exile];
+                else if (toZone === 'hand') updates.hand = [...updates.hand, card];
+                else if (toZone === 'command') updates.commandZone = [card, ...updates.commandZone];
+                else if (toZone === 'library_top') updates.library = [card, ...updates.library];
+                else if (toZone === 'library_bottom') updates.library = [...updates.library, card];
 
                 updateMyState(updates);
             };
@@ -537,32 +630,6 @@
                     const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
                     updateMyState({ battlefieldLower: bf });
                 }
-                setContextMenu(null); // Close menu after tap
-            };
-            
-            const updateCardCounters = (cardId, battlefield, counterType, delta) => {
-                let zoneKey = battlefield === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
-                const newZone = (myState[zoneKey] || []).map(c => {
-                    if (c.instanceId === cardId) {
-                        const newCounters = { ...c.counters };
-                        newCounters[counterType] = (newCounters[counterType] || 0) + delta;
-                        if (newCounters[counterType] < 0) newCounters[counterType] = 0; // Prevent negative counter counts
-                        return { ...c, counters: newCounters };
-                    }
-                    return c;
-                });
-                updateMyState({ [zoneKey]: newZone });
-            };
-
-            const handleCardContextMenu = (e, card, zone, battlefield) => {
-                e.preventDefault();
-                setContextMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    card,
-                    zone,
-                    battlefield
-                });
             };
 
             const handleLeaveGame = () => {
@@ -587,7 +654,6 @@
                     'W': 'W', 'U': 'U', 'B': 'B', 'R': 'R', 'G': 'G'
                 };
                 const colors = [];
-                // Minified deck might use color_identity array directly
                 const colorIdentity = deckData.commander.color_identity || [];
                 colorIdentity.forEach(c => {
                     if (colorMap[c]) colors.push(c);
@@ -666,8 +732,12 @@
                 e.preventDefault();
                 if (!draggedCard) return;
                 const rect = battlefieldRef.current.getBoundingClientRect();
-                let x = e.clientX - rect.left - 45; // 45 = half card width
-                let y = e.clientY - rect.top - 60;  // 60 = half card height
+                let x = e.clientX - rect.left - 45;
+                let y = e.clientY - rect.top - 60;
+
+                if (targetBattlefield === 'lower') {
+                    if (x < 240) x = 240;
+                }
 
                 if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
                     const updates = {};
@@ -696,10 +766,72 @@
                 setDraggedCard(null);
             };
 
+            {/* --- NEW: Reusable function to render card with counters/stats --- */}
+            const renderBattlefieldCard = (card, zone, isMine = false) => {
+                const zoneName = isMine ? zone : `opponent_${zone}`;
+                return (
+                    <div 
+                        key={card.instanceId} 
+                        className="absolute cursor-pointer"
+                        style={{ left: card.x, top: isMine ? card.y : (zone === 'battlefieldLower' ? undefined : 10), bottom: isMine ? undefined : (zone === 'battlefieldLower' ? card.y : undefined) }}
+                        draggable={isMine}
+                        onDragStart={(e) => isMine && handleDragStart(e, card, zone)}
+                        onContextMenu={(e) => {
+                            if (isMine) {
+                                e.preventDefault();
+                                setCardMenu({ x: e.clientX, y: e.clientY, card, zone });
+                            }
+                        }}
+                    >
+                        {/* Counter Badges */}
+                        {card.counters && card.counters.length > 0 && (
+                            <div className="counter-badge-container">
+                                {card.counters.map(c => (
+                                    <span key={c.type} className="counter-badge" title={`${c.type}: ${c.count}`}>
+                                        {c.type} ({c.count})
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        
+                        <CardImage 
+                            src={card.image_url} 
+                            className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} ${!isMine && zone === 'battlefieldUpper' ? 'border-2 border-red-500/50' : ''}`}
+                            onClick={() => isMine && toggleTap(card.instanceId, zone)}
+                            onMouseEnter={() => setHoveredCard(card.image_url)}
+                            onMouseLeave={() => setHoveredCard(null)}
+                        />
+                        
+                        {/* Token Stats */}
+                        {card.isToken && card.p_t && (
+                            <div className="token-stats">
+                                {card.p_t}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
             return (
                 <div className="h-full w-full relative bg-gray-900 overflow-hidden flex flex-col">
                     
                     {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
+
+                    {/* --- NEW: Render Token Modal --- */}
+                    <TokenModal 
+                        isOpen={isTokenModalOpen} 
+                        onClose={() => setTokenModalOpen(false)} 
+                        onCreate={createTokens} 
+                    />
+
+                    {/* --- NEW: Render Card Context Menu --- */}
+                    {cardMenu && (
+                        <ContextMenu 
+                            x={cardMenu.x} y={cardMenu.y} 
+                            onClose={() => setCardMenu(null)}
+                            options={generateCardOptions(cardMenu.card, cardMenu.zone)} 
+                        />
+                    )}
 
                     {libraryMenu && (
                         <ContextMenu 
@@ -711,18 +843,6 @@
                                 { label: 'Shuffle Library', action: shuffleLibrary },
                                 { label: 'View Entire Library', action: () => setViewingZone('library') }
                             ]} 
-                        />
-                    )}
-                    
-                    {contextMenu && (
-                        <CardContextMenu 
-                            x={contextMenu.x} y={contextMenu.y} 
-                            card={contextMenu.card} 
-                            battlefield={contextMenu.battlefield}
-                            onClose={() => setContextMenu(null)}
-                            onUpdateCounters={updateCardCounters}
-                            onMoveToZone={moveCardToZone}
-                            onToggleTap={toggleTap}
                         />
                     )}
 
@@ -800,19 +920,7 @@
                     <div className="absolute top-0 left-0 w-full h-[33vh] bg-red-900/10 border-b-2 border-red-500/30 z-0">
                          <div className="relative w-full h-full overflow-hidden">
                             {opponentState?.battlefieldLower?.map(card => (
-                                <div 
-                                    key={card.instanceId} 
-                                    className="absolute cursor-pointer"
-                                    style={{ left: card.x, bottom: card.y }}
-                                >
-                                    <CardImage 
-                                        src={card.image_url} 
-                                        className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
-                                        onMouseEnter={() => setHoveredCard(card.image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
-                                    />
-                                    <CounterDisplay counters={card.counters || {}} />
-                                </div>
+                                renderBattlefieldCard(card, 'battlefieldLower', false)
                             )) || <div className="flex items-center justify-center h-full text-red-500/20 text-sm font-bold uppercase tracking-widest">Opponent Territory</div>}
                          </div>
                     </div>
@@ -855,14 +963,13 @@
                                         <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
                                         <div className="flex flex-wrap gap-2 content-start">
                                             {opponentState.commandZone.map(card => (
-                                                <div key={card.instanceId} className="flex flex-col items-center relative">
+                                                <div key={card.instanceId} className="flex flex-col items-center">
                                                     <CardImage 
                                                         src={card.image_url} 
                                                         className="w-12 h-16 border border-yellow-500 flex-shrink-0"
                                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                                         onMouseLeave={() => setHoveredCard(null)}
                                                     />
-                                                    <CounterDisplay counters={card.counters || {}} />
                                                 </div>
                                             ))}
                                         </div>
@@ -890,19 +997,7 @@
                     {/* --- MIDDLE ZONE (SHARED BATTLEFIELD UPPER) --- */}
                     <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
                         {opponentState?.battlefieldUpper?.map(card => (
-                            <div 
-                                key={card.instanceId} 
-                                className="absolute cursor-pointer z-10"
-                                style={{ left: card.x, top: 10 }}
-                            >
-                                <CardImage 
-                                    src={card.image_url} 
-                                    className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} border-2 border-red-500/50`}
-                                    onMouseEnter={() => setHoveredCard(card.image_url)}
-                                    onMouseLeave={() => setHoveredCard(null)}
-                                />
-                                <CounterDisplay counters={card.counters || {}} />
-                            </div>
+                            renderBattlefieldCard(card, 'battlefieldUpper', false)
                         ))}
 
                         <div 
@@ -912,23 +1007,7 @@
                             onDragOver={(e) => e.preventDefault()}
                         >
                             {(myState.battlefieldUpper || []).map(card => (
-                                <div 
-                                    key={card.instanceId} 
-                                    className="absolute cursor-pointer z-20"
-                                    style={{ left: card.x, top: card.y }}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')}
-                                    onContextMenu={(e) => handleCardContextMenu(e, card, 'battlefieldUpper', 'upper')}
-                                >
-                                    <CardImage 
-                                        src={card.image_url} 
-                                        className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
-                                        onClick={() => toggleTap(card.instanceId, 'upper')}
-                                        onMouseEnter={() => setHoveredCard(card.image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
-                                    />
-                                    <CounterDisplay counters={card.counters || {}} />
-                                </div>
+                                renderBattlefieldCard(card, 'battlefieldUpper', true)
                             ))}
                         </div>
                     </div>
@@ -942,23 +1021,7 @@
                             onDragOver={(e) => e.preventDefault()}
                         >
                             {(myState.battlefieldLower || []).map(card => (
-                                <div 
-                                    key={card.instanceId} 
-                                    className="absolute cursor-pointer"
-                                    style={{ left: card.x, top: card.y }}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')}
-                                    onContextMenu={(e) => handleCardContextMenu(e, card, 'battlefieldLower', 'lower')}
-                                >
-                                    <CardImage 
-                                        src={card.image_url} 
-                                        className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'}`}
-                                        onClick={() => toggleTap(card.instanceId, 'lower')}
-                                        onMouseEnter={() => setHoveredCard(card.image_url)}
-                                        onMouseLeave={() => setHoveredCard(null)}
-                                    />
-                                    <CounterDisplay counters={card.counters || {}} />
-                                </div>
+                                renderBattlefieldCard(card, 'battlefieldLower', true)
                             ))}
                         </div>
                     </div>
@@ -1056,8 +1119,7 @@
                                         key={card.instanceId}
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, card, 'command')}
-                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center relative"
-                                        onContextMenu={(e) => handleCardContextMenu(e, card, 'commandZone', 'lower')} // Commander can have counters
+                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center"
                                     >
                                         <CardImage 
                                             src={card.image_url} 
@@ -1065,7 +1127,6 @@
                                             onMouseEnter={() => setHoveredCard(card.image_url)}
                                             onMouseLeave={() => setHoveredCard(null)}
                                         />
-                                        <CounterDisplay counters={card.counters || {}} />
                                         {card.isCommander && (
                                             <div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
                                         )}
@@ -1126,10 +1187,11 @@
                             </div>
                         </div>
 
+                        {/* --- MODIFIED: Added Token Button --- */}
                         <div className="flex gap-2 flex-shrink-0">
                             <button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button>
+                            <button onClick={() => setTokenModalOpen(true)} className="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Token</button>
                             <button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button>
-                            <button onClick={createToken} className="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Token</button>
                         </div>
                     </div>
                 </div>
@@ -1207,45 +1269,8 @@
 
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
-            // --- MINIFY HELPER START ---
-            // Helper function to strip down deck data before saving to Firebase (prevents 1MB limit error)
-            const minifyDeck = (fullDeck) => {
-                if (!fullDeck) return null;
-
-                const minifyCard = (card) => {
-                    if (!card) return null;
-                    return {
-                        id: card.id,
-                        name: card.name,
-                        // Ensure we grab the correct image URL immediately so we don't store the whole nested structure
-                        image_url: card.image_url || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || 'https://placehold.co/200x280?text=No+Image',
-                        cmc: card.cmc || 0,
-                        type_line: card.type_line || '',
-                        color_identity: card.color_identity || [], // Ensure this is not undefined
-                        power: card.power || '',
-                        toughness: card.toughness || '',
-                        oracle_text: card.oracle_text || '',
-                        instanceId: card.instanceId || null // FIXED: Prevent undefined error
-                    };
-                };
-
-                return {
-                    id: fullDeck.id,
-                    name: fullDeck.name,
-                    commander: minifyCard(fullDeck.commander),
-                    cards: fullDeck.cards ? fullDeck.cards.map(minifyCard) : [],
-                    // We don't need sideboard in the active game usually, so send empty to save space
-                    sideboard: [] 
-                };
-            };
-            // --- MINIFY HELPER END ---
-
             const createRoom = async () => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
-                
-                // Use minified deck to save space
-                const tinyDeck = minifyDeck(selectedDeck);
-
                 const roomRef = await window.addDoc(window.getPublicRoomCollection(), {
                     host: user.uid, 
                     hostName: user.displayName || user.email.split('@')[0],
@@ -1253,7 +1278,7 @@
                     createdAt: Date.now(), 
                     gameState: {},
                     emptyAt: null,
-                    playerDecks: { [user.uid]: tinyDeck } // Send tinyDeck
+                    playerDecks: { [user.uid]: selectedDeck }
                 });
                 setCurrentRoomId(roomRef.id);
                 setView('game');
@@ -1261,17 +1286,13 @@
 
             const joinRoom = async (roomId) => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
-                
-                // Use minified deck to save space
-                const tinyDeck = minifyDeck(selectedDeck);
-
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const room = rooms.find(r => r.id === roomId);
                 
                 await window.updateDoc(roomRef, { 
                     players: [room.players[0], user.uid],
                     emptyAt: null,
-                    [`playerDecks.${user.uid}`]: tinyDeck // Send tinyDeck
+                    [`playerDecks.${user.uid}`]: selectedDeck
                 });
                 setCurrentRoomId(roomId);
                 setView('game');
