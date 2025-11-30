@@ -1056,11 +1056,11 @@
                         image_url: card.image_url || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || 'https://placehold.co/200x280?text=No+Image',
                         cmc: card.cmc || 0,
                         type_line: card.type_line || '',
-                        color_identity: card.color_identity || [],
+                        color_identity: card.color_identity || [], // Ensure this is not undefined
                         power: card.power || '',
                         toughness: card.toughness || '',
                         oracle_text: card.oracle_text || '',
-                        instanceId: card.instanceId // Keep this if it exists
+                        instanceId: card.instanceId || null // FIXED: Prevent undefined error
                     };
                 };
 
