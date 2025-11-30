@@ -1369,16 +1369,24 @@
                 });
             };
 
+// ... (inside the App component)
+
             // --- REFACTOR: leaveGame must clean up game_state doc ---
             const leaveGame = async () => {
                 if (currentRoomId) {
                     const roomRef = window.doc(db, 'arena_rooms', currentRoomId);
                     const myStateRef = window.doc(db, 'arena_rooms', currentRoomId, 'game_state', user.uid);
                     
-                    // Delete my game state document
-                    try { await window.deleteDoc(myStateRef); } catch(e) { console.error("Could not delete my state", e); }
+                    // 1. Delete my game state document (Required to pass the new security rule check)
+                    try { 
+                        await window.deleteDoc(myStateRef); 
+                        console.log("Successfully deleted my player state document.");
+                    } catch(e) { 
+                        // It's crucial for the user to leave, so we log the error but proceed.
+                        console.error("Could not delete my player state document. This might be a temporary permission issue or the document already gone:", e); 
+                    }
                     
-                    // Update the lobby doc
+                    // 2. Update the lobby doc
                     const roomSnap = await window.getDoc(roomRef); // Use getDoc for a single read
                     
                     if (roomSnap.exists()) {
@@ -1395,6 +1403,7 @@
                                 playerInfo: {},
                                 emptyAt: Date.now() + ROOM_TIMEOUT_MS
                             });
+                            console.log("Room marked for cleanup timeout.");
                         } else {
                             // If opponent is still here, just remove me
                             await window.updateDoc(roomRef, {
@@ -1402,6 +1411,7 @@
                                 playerInfo: updatedPlayerInfo,
                                 emptyAt: null // No longer empty
                             });
+                            console.log("Player removed from room.");
                         }
                     }
                 }
@@ -1409,6 +1419,8 @@
                 setView('lobby');
                 setCurrentRoomId(null);
             };
+
+// ... (rest of the App component)
 
             if (view === 'game' && currentRoomId && selectedDeck) {
                 return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
@@ -1513,3 +1525,4 @@
     </script>
 </body>
 </html>
+
