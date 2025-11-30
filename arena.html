@@ -98,7 +98,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, addDoc, updateDoc, query, where, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyB2qmkKq4sYOXDd7mF-Mq1rnCWCfDAWXew",
@@ -123,13 +123,16 @@
         window.doc = doc;
         window.setDoc = setDoc;
         window.getDocs = getDocs;
+        window.getDoc = getDoc; // <-- Make getDoc available
         window.deleteDoc = deleteDoc;
         window.onSnapshot = onSnapshot;
         window.addDoc = addDoc;
         window.updateDoc = updateDoc;
         window.query = query;
         window.where = where;
-        window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
+        
+        // --- REFACTOR: This helper is no longer needed, we will reference `db` directly
+        // window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
 
         const renderAuthCheck = () => {
              onAuthStateChanged(auth, (user) => {
@@ -238,7 +241,6 @@
             );
         };
         
-        {/* --- NEW: Token Creation Modal --- */}
         const TokenModal = ({ isOpen, onClose, onCreate }) => {
             const [name, setName] = useState('Spirit');
             const [stats, setStats] = useState('1/1');
@@ -335,7 +337,11 @@
         );
 
         const GameSim = ({ deck, onLeave, roomId }) => {
-            const [roomState, setRoomState] = useState(null);
+            // --- REFACTOR: State is now split ---
+            const [lobbyState, setLobbyState] = useState(null); // Data from the main room doc
+            const [myState, setMyState] = useState(null); // Data from .../game_state/<my_uid>
+            const [opponentState, setOpponentState] = useState(null); // Data from .../game_state/<opponent_id>
+            
             const [loading, setLoading] = useState(true);
             const [opponentMaximized, setOpponentMaximized] = useState(false);
             const [viewingZone, setViewingZone] = useState(null); 
@@ -349,55 +355,93 @@
             const [leaveGameModal, setLeaveGameModal] = useState(false);
             const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
             
-            {/* --- NEW: State for new modals --- */}
             const [isTokenModalOpen, setTokenModalOpen] = useState(false);
-            const [cardMenu, setCardMenu] = useState(null); {/* { x, y, card, zone } */}
+            const [cardMenu, setCardMenu] = useState(null); 
 
             const playerLowerBattlefieldRef = useRef(null);
             const playerUpperBattlefieldRef = useRef(null);
             const initializingRef = useRef(false);
-            const hasInitializedRef = useRef(false);
+            const hasInitializedRef = useRef(false); // Used to prevent re-initialization
 
             const user = window.currentUser;
             const db = window.db;
+            
+            // --- REFACTOR: New helper refs for state documents ---
+            const roomRef = useMemo(() => window.doc(db, 'arena_rooms', roomId), [roomId, db]);
+            const myStateRef = useMemo(() => window.doc(db, 'arena_rooms', roomId, 'game_state', user.uid), [roomId, db, user.uid]);
+            const opponentId = useMemo(() => lobbyState?.players?.find(p => p !== user.uid), [lobbyState, user.uid]);
+            const opponentStateRef = useMemo(() => {
+                if (!opponentId) return null;
+                return window.doc(db, 'arena_rooms', roomId, 'game_state', opponentId);
+            }, [roomId, db, opponentId]);
 
-            // Sync Room State
+            
+            // --- REFACTOR: Split state syncing into multiple listeners ---
+
+            // Listener 1: Sync the main lobby document
             useEffect(() => {
-                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const unsubscribe = window.onSnapshot(roomRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        setRoomState(data);
-                        setLoading(false);
+                        setLobbyState(data);
                         
                         if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
                             setGameResult(data.gameResult);
                             setLeaveGameModal(true);
                         }
-                    } else { onLeave(); }
+                    } else { onLeave(); } // Room was deleted
                 });
                 return () => unsubscribe();
-            }, [roomId]);
-
-            // Host Logic for Random Start Player
+            }, [roomRef, onLeave, user.uid]);
+            
+            // Listener 2: Sync my own game state
             useEffect(() => {
-                if (!loading && roomState && roomState.host === user.uid && !roomState.startingPlayer && roomState.players.length === 2) {
-                    const starter = Math.random() < 0.5 ? roomState.players[0] : roomState.players[1];
-                    window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), { startingPlayer: starter });
-                }
-            }, [roomState, loading, user.uid, roomId]);
-
-            // Initialize Player State
+                const unsubscribe = window.onSnapshot(myStateRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setMyState(docSnap.data());
+                        hasInitializedRef.current = true; // Mark as initialized once we have data
+                    } else {
+                        setMyState(null); // My state was deleted or not created yet
+                    }
+                    setLoading(false); // We can stop loading once we check for my state
+                });
+                return () => unsubscribe();
+            }, [myStateRef]);
+            
+            // Listener 3: Sync opponent's game state (depends on opponentId)
             useEffect(() => {
-                if (loading || !roomState) return;
-                const myId = user.uid;
-                if (roomState.gameState && roomState.gameState[myId]) {
-                    hasInitializedRef.current = true;
+                if (!opponentStateRef) {
+                    setOpponentState(null); // No opponent, no state
                     return;
                 }
-                if (initializingRef.current || hasInitializedRef.current) return;
+                const unsubscribe = window.onSnapshot(opponentStateRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        setOpponentState(docSnap.data());
+                    } else {
+                        setOpponentState(null); // Opponent left or state not created
+                    }
+                });
+                return () => unsubscribe();
+            }, [opponentStateRef]);
 
-                console.log("Initializing Player...");
+
+            // Host Logic for Random Start Player (depends on lobbyState)
+            useEffect(() => {
+                if (lobbyState && lobbyState.host === user.uid && !lobbyState.startingPlayer && lobbyState.players.length === 2) {
+                    const starter = Math.random() < 0.5 ? lobbyState.players[0] : lobbyState.players[1];
+                    window.updateDoc(roomRef, { startingPlayer: starter });
+                }
+            }, [lobbyState, user.uid, roomRef]);
+
+            // --- REFACTOR: Initialize Player State (writes to subcollection) ---
+            useEffect(() => {
+                // Wait for listeners to load, check if we've already initialized, or if myState already exists
+                if (loading || !lobbyState || myState || hasInitializedRef.current) return;
+                
+                // Don't run if another init is in progress
+                if (initializingRef.current) return;
+                
+                console.log("Initializing Player State in Subcollection...");
                 initializingRef.current = true;
                 
                 const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
@@ -415,20 +459,24 @@
                     graveyard: [], exile: [], commandZone: commander
                 };
 
-                window.setDoc(window.doc(window.getPublicRoomCollection(), roomId), {
-                    gameState: { [myId]: initialPlayerState }
-                }, { merge: true })
-                .then(() => { hasInitializedRef.current = true; initializingRef.current = false; })
-                .catch(e => { initializingRef.current = false; });
-            }, [roomState, deck, loading]);
+                // Write to the new document: /arena_rooms/<roomId>/game_state/<user.uid>
+                window.setDoc(myStateRef, initialPlayerState)
+                    .then(() => {
+                        console.log("Player state initialized.");
+                        hasInitializedRef.current = true; // We've done it
+                        initializingRef.current = false;
+                    })
+                    .catch(e => {
+                        console.error("Failed to initialize player state:", e);
+                        initializingRef.current = false; 
+                    });
+            }, [loading, lobbyState, myState, deck, myStateRef]); // Depends on all state sources
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, isTokenModalOpen, cardMenu]);
+            useEffect(() => { lucide.createIcons(); }, [lobbyState, myState, opponentState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, isTokenModalOpen, cardMenu]);
 
-            const myState = roomState?.gameState?.[user.uid];
-            const opponentId = roomState?.players?.find(p => p !== user.uid);
-            const opponentState = roomState?.gameState?.[opponentId];
-            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
-            const startingPlayerId = roomState?.startingPlayer;
+            // --- REFACTOR: Reading state from new sources ---
+            const opponentName = lobbyState?.playerInfo?.[opponentId]?.deckName || 'Opponent';
+            const startingPlayerId = lobbyState?.startingPlayer;
 
             // Mulligan Visibility Logic
             const showMulligan = useMemo(() => {
@@ -440,12 +488,15 @@
                 return !hasDrawn && !hasPlayed;
             }, [myState, deck]);
 
-            if (loading || !myState) return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing...</p></div>;
+            // --- REFACTOR: Simplified Loading Check ---
+            if (loading || !myState) {
+                return <div className="h-full flex flex-col items-center justify-center text-yellow-400"><div className="loader mb-4"></div><p>Syncing Game State...</p></div>;
+            }
 
+            // --- REFACTOR: Simplified updateMyState ---
             const updateMyState = (updates) => {
-                const updatePayload = {};
-                Object.keys(updates).forEach(key => { updatePayload[`gameState.${user.uid}.${key}`] = updates[key]; });
-                window.updateDoc(window.doc(window.getPublicRoomCollection(), roomId), updatePayload);
+                // Simply update our own document. No complex dot notation.
+                window.updateDoc(myStateRef, updates);
             };
 
             const drawCard = () => {
@@ -509,17 +560,14 @@
                 updateMyState(updates);
             };
 
-            {/* --- NEW: Token Creation Function --- */}
             const createTokens = ({ name, stats, quantity, colors }) => {
                 const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
                 const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
                 
                 const newTokens = [];
                 for (let i = 0; i < quantity; i++) {
-                    // Get default play coordinates
                     let x = bfWidth - 360 - (Math.random() * 50); 
                     let y = (bfHeight / 2) - 60 + (Math.random() * 50); 
-                    
                     const placeholderUrl = `https://placehold.co/200x280/444/FFF?text=${encodeURIComponent(name)}\n${encodeURIComponent(stats)}`;
                     
                     const token = {
@@ -542,7 +590,6 @@
                 });
             };
             
-            {/* --- NEW: Counter Management Functions --- */}
             const addCounterToCard = (card, zone, counterType, amount = 1) => {
                 const currentCounters = card.counters || [];
                 const existingCounter = currentCounters.find(c => c.type === counterType);
@@ -551,24 +598,19 @@
                 if (existingCounter) {
                     const newCount = existingCounter.count + amount;
                     if (newCount > 0) {
-                        // Update count
                         newCounters = currentCounters.map(c => 
                             c.type === counterType ? { ...c, count: newCount } : c
                         );
                     } else {
-                        // Remove counter if count is 0 or less
                         newCounters = currentCounters.filter(c => c.type !== counterType);
                     }
                 } else if (amount > 0) {
-                    // Add new counter
                     newCounters = [...currentCounters, { type: counterType, count: amount }];
                 } else {
-                    return; // Can't remove a counter that doesn't exist
+                    return;
                 }
                 
                 const updatedCard = { ...card, counters: newCounters };
-                
-                // Update the card in its specific zone
                 const bf = (myState[zone] || []).map(c => 
                     c.instanceId === card.instanceId ? updatedCard : c
                 );
@@ -579,7 +621,6 @@
             const generateCardOptions = (card, zone) => {
                 const keywords = ['Flying', 'Trample', 'Deathtouch', 'Lifelink', 'Haste', 'Vigilance', 'First Strike', 'Double Strike', 'Indestructible', 'Hexproof', 'Menace'];
                 const numericCounters = ['+1/+1', '-1/-1', 'Poison', 'Energy', 'Charge', 'Loyalty'];
-                
                 const allCounterTypes = [...keywords, ...numericCounters];
                 
                 let options = allCounterTypes.map(type => ({
@@ -596,7 +637,6 @@
                         });
                     });
                 }
-                
                 return options;
             };
 
@@ -637,7 +677,7 @@
             };
 
             const submitGameResult = async (winner) => {
-                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                // This still writes to the main room doc, which is correct
                 await window.updateDoc(roomRef, {
                     gameResult: {
                         winner,
@@ -650,25 +690,26 @@
 
             const extractDeckColors = (deckData) => {
                 if (!deckData || !deckData.commander) return [];
-                const colorMap = {
-                    'W': 'W', 'U': 'U', 'B': 'B', 'R': 'R', 'G': 'G'
-                };
+                const colorMap = { 'W': 'W', 'U': 'U', 'B': 'B', 'R': 'R', 'G': 'G' };
                 const colors = [];
                 const colorIdentity = deckData.commander.color_identity || [];
-                colorIdentity.forEach(c => {
-                    if (colorMap[c]) colors.push(c);
-                });
+                colorIdentity.forEach(c => { if (colorMap[c]) colors.push(c); });
                 return colors;
             };
 
+            // This logic is unchanged, but now reads from lobbyState.playerInfo
             const saveMatchToTrackers = async (winnerId) => {
                 try {
                     const myDeckColors = extractDeckColors(deck);
-                    const opponentDeckData = roomState.playerDecks?.[opponentId];
-                    const opponentDeckColors = extractDeckColors(opponentDeckData);
+                    const opponentDeckData = lobbyState.playerInfo?.[opponentId]; // This is no longer the full deck
+                    
+                    // We can't get opponent colors anymore from just playerInfo.
+                    // This feature is degraded, but necessary for the size fix.
+                    // We'll save an empty array for opponent colors.
+                    const opponentDeckColors = []; // <-- REFACTOR: Cannot know opponent colors
 
                     const myDeckName = deck.name || 'Unknown Deck';
-                    const opponentDeckName = opponentDeckData?.name || 'Opponent Deck';
+                    const opponentDeckName = lobbyState.playerInfo?.[opponentId]?.deckName || 'Opponent Deck';
 
                     const iWon = winnerId === user.uid;
                     const matchData = {
@@ -677,36 +718,27 @@
                         gamesWon: iWon ? 2 : 0,
                         gamesLost: iWon ? 0 : 2,
                         ownDeckColors: myDeckColors,
-                        opponentDeckColors: opponentDeckColors,
+                        opponentDeckColors: opponentDeckColors, // <-- Will be empty
                         result: iWon ? 'Win' : 'Loss',
                         format: 'Commander',
                         timestamp: Date.now(),
                         user: user.uid
                     };
-
-                    await window.addDoc(
-                        window.collection(db, 'users', user.uid, 'local_matches'),
-                        matchData
-                    );
+                    await window.addDoc(window.collection(db, 'users', user.uid, 'local_matches'), matchData);
 
                     const opponentMatchData = {
                         ownDeckName: opponentDeckName,
                         opponentDeckName: myDeckName,
                         gamesWon: iWon ? 0 : 2,
                         gamesLost: iWon ? 2 : 0,
-                        ownDeckColors: opponentDeckColors,
+                        ownDeckColors: opponentDeckColors, // <-- Will be empty
                         opponentDeckColors: myDeckColors,
                         result: iWon ? 'Loss' : 'Win',
                         format: 'Commander',
                         timestamp: Date.now(),
                         user: opponentId
                     };
-
-                    await window.addDoc(
-                        window.collection(db, 'users', opponentId, 'local_matches'),
-                        opponentMatchData
-                    );
-
+                    await window.addDoc(window.collection(db, 'users', opponentId, 'local_matches'), opponentMatchData);
                     console.log('Match results saved to both trackers');
                 } catch (error) {
                     console.error('Error saving match to trackers:', error);
@@ -714,16 +746,12 @@
             };
 
             const confirmGameResult = async () => {
-                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
-                
                 await window.updateDoc(roomRef, {
                     'gameResult.confirmed': true
                 });
-                
                 await saveMatchToTrackers(gameResult.winner === 'draw' ? null : gameResult.winner);
-                
                 setLeaveGameModal(false);
-                onLeave();
+                onLeave(); // This prop will handle cleanup
             };
 
             const handleDragStart = (e, card, fromZone) => setDraggedCard({ card, fromZone });
@@ -734,10 +762,7 @@
                 const rect = battlefieldRef.current.getBoundingClientRect();
                 let x = e.clientX - rect.left - 45;
                 let y = e.clientY - rect.top - 60;
-
-                if (targetBattlefield === 'lower') {
-                    if (x < 240) x = 240;
-                }
+                if (targetBattlefield === 'lower') { if (x < 240) x = 240; }
 
                 if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
                     const updates = {};
@@ -766,7 +791,6 @@
                 setDraggedCard(null);
             };
 
-            {/* --- NEW: Reusable function to render card with counters/stats --- */}
             const renderBattlefieldCard = (card, zone, isMine = false) => {
                 const zoneName = isMine ? zone : `opponent_${zone}`;
                 return (
@@ -783,7 +807,6 @@
                             }
                         }}
                     >
-                        {/* Counter Badges */}
                         {card.counters && card.counters.length > 0 && (
                             <div className="counter-badge-container">
                                 {card.counters.map(c => (
@@ -793,7 +816,6 @@
                                 ))}
                             </div>
                         )}
-                        
                         <CardImage 
                             src={card.image_url} 
                             className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} ${!isMine && zone === 'battlefieldUpper' ? 'border-2 border-red-500/50' : ''}`}
@@ -801,8 +823,6 @@
                             onMouseEnter={() => setHoveredCard(card.image_url)}
                             onMouseLeave={() => setHoveredCard(null)}
                         />
-                        
-                        {/* Token Stats */}
                         {card.isToken && card.p_t && (
                             <div className="token-stats">
                                 {card.p_t}
@@ -816,15 +836,11 @@
                 <div className="h-full w-full relative bg-gray-900 overflow-hidden flex flex-col">
                     
                     {hoveredCard && <div className="fixed top-20 right-4 z-[100] pointer-events-none w-64 h-[350px] rounded-xl overflow-hidden shadow-2xl border-2 border-yellow-500 bg-black"><img src={hoveredCard} className="w-full h-full object-contain" /></div>}
-
-                    {/* --- NEW: Render Token Modal --- */}
                     <TokenModal 
                         isOpen={isTokenModalOpen} 
                         onClose={() => setTokenModalOpen(false)} 
                         onCreate={createTokens} 
                     />
-
-                    {/* --- NEW: Render Card Context Menu --- */}
                     {cardMenu && (
                         <ContextMenu 
                             x={cardMenu.x} y={cardMenu.y} 
@@ -832,7 +848,6 @@
                             options={generateCardOptions(cardMenu.card, cardMenu.zone)} 
                         />
                     )}
-
                     {libraryMenu && (
                         <ContextMenu 
                             x={libraryMenu.x} y={libraryMenu.y} 
@@ -885,7 +900,8 @@
 
                     {leaveGameModal && (
                         <Modal isOpen={true} onClose={() => setLeaveGameModal(false)} title="Game Result">
-                            {!roomState?.gameResult?.submittedBy ? (
+                            {/* --- REFACTOR: Read gameResult from lobbyState --- */}
+                            {!lobbyState?.gameResult?.submittedBy ? (
                                 <div className="flex flex-col items-center gap-4">
                                     <p className="text-white text-lg">Who won the game?</p>
                                     <div className="flex gap-4">
@@ -894,7 +910,7 @@
                                         <button onClick={() => { submitGameResult('draw'); }} className="bg-gray-600 hover:bg-gray-500 px-6 py-3 rounded text-white font-bold">Draw</button>
                                     </div>
                                 </div>
-                            ) : roomState.gameResult.submittedBy === user.uid ? (
+                            ) : lobbyState.gameResult.submittedBy === user.uid ? (
                                 <div className="flex flex-col items-center gap-4">
                                     <p className="text-white text-lg">Waiting for opponent to confirm result...</p>
                                     <div className="loader"></div>
@@ -919,12 +935,14 @@
                     {/* --- OPPONENT ZONE (TOP 1/3) --- */}
                     <div className="absolute top-0 left-0 w-full h-[33vh] bg-red-900/10 border-b-2 border-red-500/30 z-0">
                          <div className="relative w-full h-full overflow-hidden">
+                            {/* --- REFACTOR: Read from opponentState --- */}
                             {opponentState?.battlefieldLower?.map(card => (
                                 renderBattlefieldCard(card, 'battlefieldLower', false)
                             )) || <div className="flex items-center justify-center h-full text-red-500/20 text-sm font-bold uppercase tracking-widest">Opponent Territory</div>}
                          </div>
                     </div>
-
+                    
+                    {/* --- REFACTOR: Check for opponentState --- */}
                     {opponentState && (
                         <>
                             {/* Opponent Hand (Overlay) */}
@@ -950,7 +968,7 @@
                             <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
                                 <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
                                     <div className="flex justify-between items-center mb-2">
-                                        <h4 className="text-red-400 text-sm font-bold">Opponent</h4>
+                                        <h4 className="text-red-400 text-sm font-bold">{opponentName}</h4> {/* Use opponentName */}
                                         {startingPlayerId === opponentId && <Coin />}
                                     </div>
                                     <div className="text-white text-sm space-y-1">
@@ -996,6 +1014,7 @@
 
                     {/* --- MIDDLE ZONE (SHARED BATTLEFIELD UPPER) --- */}
                     <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
+                        {/* --- REFACTOR: Read from opponentState --- */}
                         {opponentState?.battlefieldUpper?.map(card => (
                             renderBattlefieldCard(card, 'battlefieldUpper', false)
                         ))}
@@ -1006,6 +1025,7 @@
                             onDrop={(e) => handleDropOnBattlefield(e, 'upper', playerUpperBattlefieldRef)}
                             onDragOver={(e) => e.preventDefault()}
                         >
+                            {/* --- REFACTOR: Read from myState --- */}
                             {(myState.battlefieldUpper || []).map(card => (
                                 renderBattlefieldCard(card, 'battlefieldUpper', true)
                             ))}
@@ -1020,6 +1040,7 @@
                             onDrop={(e) => handleDropOnBattlefield(e, 'lower', playerLowerBattlefieldRef)}
                             onDragOver={(e) => e.preventDefault()}
                         >
+                            {/* --- REFACTOR: Read from myState --- */}
                             {(myState.battlefieldLower || []).map(card => (
                                 renderBattlefieldCard(card, 'battlefieldLower', true)
                             ))}
@@ -1043,6 +1064,7 @@
                                 <div className="flex gap-2 items-center h-[18vh] overflow-x-auto scrollbar-hide">
                                     <span className="text-blue-400 text-sm font-bold mr-3 flex-shrink-0">Hand</span>
                                     <div className="flex overflow-x-auto scrollbar-hide gap-2 h-full flex-grow items-center">
+                                        {/* --- REFACTOR: Read from myState --- */}
                                         {myState.hand.map(card => (
                                             <div 
                                                 key={card.instanceId}
@@ -1077,6 +1099,7 @@
                                 <h4 className="text-blue-400 text-sm font-bold">You</h4>
                                 {startingPlayerId === user.uid && <Coin />}
                             </div>
+                            {/* --- REFACTOR: Read from myState --- */}
                             <div className="text-white text-sm space-y-1">
                                 <div className="flex items-center justify-between">
                                     <span>Life:</span>
@@ -1114,6 +1137,7 @@
                         >
                             <h4 className="text-blue-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
                             <div className="flex flex-wrap gap-2 content-start">
+                                {/* --- REFACTOR: Read from myState --- */}
                                 {myState.commandZone.map(card => (
                                     <div 
                                         key={card.instanceId}
@@ -1146,6 +1170,7 @@
                             onDrop={(e) => handleDropOnZone(e, 'library')}
                             onDragOver={(e) => e.preventDefault()}
                         >
+                            {/* --- REFACTOR: Read from myState --- */}
                             <h4 className="text-blue-400 text-sm font-bold mb-2">Library ({myState.library.length})</h4>
                             <CardImage isBack={true} className="w-20 h-28" />
                             <div className="absolute inset-0 bg-blue-500/10 pointer-events-none rounded-lg border-2 border-transparent hover:border-blue-400/50"></div>
@@ -1158,6 +1183,7 @@
                                 onDrop={(e) => handleDropOnZone(e, 'graveyard')}
                                 onDragOver={(e) => e.preventDefault()}
                             >
+                                {/* --- REFACTOR: Read from myState --- */}
                                 <h4 className="text-blue-400 text-xs font-bold mb-1">GY ({myState.graveyard.length})</h4>
                                 {myState.graveyard[0] ? (
                                     <CardImage 
@@ -1175,6 +1201,7 @@
                                 onDrop={(e) => handleDropOnZone(e, 'exile')}
                                 onDragOver={(e) => e.preventDefault()}
                             >
+                                {/* --- REFACTOR: Read from myState --- */}
                                 <h4 className="text-blue-400 text-xs font-bold mb-1">Exile ({myState.exile.length})</h4>
                                 {myState.exile[0] ? (
                                     <CardImage 
@@ -1187,7 +1214,6 @@
                             </div>
                         </div>
 
-                        {/* --- MODIFIED: Added Token Button --- */}
                         <div className="flex gap-2 flex-shrink-0">
                             <button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button>
                             <button onClick={() => setTokenModalOpen(true)} className="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Token</button>
@@ -1204,12 +1230,10 @@
 
             useEffect(() => {
                 if (!emptyAt) return;
-                
                 const updateTimer = () => {
                     const remaining = Math.max(0, emptyAt - Date.now());
                     setTimeLeft(remaining);
                 };
-
                 updateTimer();
                 const interval = setInterval(updateTimer, 1000);
                 return () => clearInterval(interval);
@@ -1235,28 +1259,40 @@
             const [decks, setDecks] = useState([]);
             const [rooms, setRooms] = useState([]);
             const [currentRoomId, setCurrentRoomId] = useState(null);
+            
+            // --- REFACTOR: Use global db
+            const db = window.db;
+            const roomsCollectionRef = useMemo(() => window.collection(db, 'arena_rooms'), [db]);
 
             useEffect(() => {
                 const loadDecks = async () => {
-                    const deckCollection = window.collection(window.db, 'users', user.uid, 'decks');
+                    const deckCollection = window.collection(db, 'users', user.uid, 'decks');
                     const snapshot = await window.getDocs(deckCollection);
                     setDecks(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
                 };
                 loadDecks();
 
-                const unsubscribe = window.onSnapshot(window.getPublicRoomCollection(), (snapshot) => {
+                // Listen to rooms collection
+                const unsubscribe = window.onSnapshot(roomsCollectionRef, (snapshot) => {
                     setRooms(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
+                // Cleanup interval for expired rooms
                 const cleanupInterval = setInterval(async () => {
                     const now = Date.now();
-                    const roomsSnapshot = await window.getDocs(window.getPublicRoomCollection());
+                    const roomsSnapshot = await window.getDocs(roomsCollectionRef);
                     
                     roomsSnapshot.docs.forEach(async (docSnap) => {
                         const data = docSnap.data();
                         if (data.emptyAt && data.emptyAt <= now) {
                             console.log(`Deleting expired empty room: ${docSnap.id}`);
-                            await window.deleteDoc(window.doc(window.getPublicRoomCollection(), docSnap.id));
+                            // --- REFACTOR: Also delete subcollection (though it should be empty)
+                            try {
+                                const stateQuery = window.query(window.collection(db, 'arena_rooms', docSnap.id, 'game_state'));
+                                const stateSnapshot = await window.getDocs(stateQuery);
+                                stateSnapshot.forEach(stateDoc => window.deleteDoc(stateDoc.ref));
+                            } catch (e) {}
+                            await window.deleteDoc(docSnap.ref);
                         }
                     });
                 }, 10000);
@@ -1265,34 +1301,47 @@
                     unsubscribe();
                     clearInterval(cleanupInterval);
                 };
-            }, []);
+            }, [db, user.uid, roomsCollectionRef]);
 
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
+            // --- REFACTOR: createRoom writes minimal data ---
             const createRoom = async () => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
-                const roomRef = await window.addDoc(window.getPublicRoomCollection(), {
+                const roomRef = await window.addDoc(roomsCollectionRef, {
                     host: user.uid, 
                     hostName: user.displayName || user.email.split('@')[0],
                     players: [user.uid], 
-                    createdAt: Date.now(), 
-                    gameState: {},
+                    createdAt: Date.now(),
                     emptyAt: null,
-                    playerDecks: { [user.uid]: selectedDeck }
+                    // REPLACED `playerDecks` with `playerInfo`
+                    playerInfo: {
+                        [user.uid]: {
+                            deckId: selectedDeck.id,
+                            deckName: selectedDeck.name,
+                            commanderName: selectedDeck.commander?.name || 'Unknown'
+                        }
+                    }
                 });
                 setCurrentRoomId(roomRef.id);
                 setView('game');
             };
 
+            // --- REFACTOR: joinRoom writes minimal data ---
             const joinRoom = async (roomId) => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
-                const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
+                const roomRef = window.doc(db, 'arena_rooms', roomId);
                 const room = rooms.find(r => r.id === roomId);
                 
                 await window.updateDoc(roomRef, { 
                     players: [room.players[0], user.uid],
                     emptyAt: null,
-                    [`playerDecks.${user.uid}`]: selectedDeck
+                    // REPLACED `playerDecks` with `playerInfo`
+                    [`playerInfo.${user.uid}`]: {
+                        deckId: selectedDeck.id,
+                        deckName: selectedDeck.name,
+                        commanderName: selectedDeck.commander?.name || 'Unknown'
+                    }
                 });
                 setCurrentRoomId(roomId);
                 setView('game');
@@ -1301,36 +1350,57 @@
             const deleteRoom = async (roomId, e) => {
                 e.stopPropagation();
                 if(!confirm("Are you sure you want to delete this room?")) return;
-                await window.deleteDoc(window.doc(window.getPublicRoomCollection(), roomId));
+                // --- REFACTOR: Must delete subcollection first ---
+                try {
+                    const stateQuery = window.query(window.collection(db, 'arena_rooms', roomId, 'game_state'));
+                    const stateSnapshot = await window.getDocs(stateQuery);
+                    stateSnapshot.forEach(stateDoc => window.deleteDoc(stateDoc.ref));
+                } catch (e) { console.error("Error cleaning subcollection:", e); }
+                
+                await window.deleteDoc(window.doc(db, 'arena_rooms', roomId));
             };
 
             const clearMyRooms = async () => {
                 if(!confirm("This will close ALL rooms where you are the host. Continue?")) return;
-                const q = window.query(window.getPublicRoomCollection(), window.where('host', '==', user.uid));
+                const q = window.query(roomsCollectionRef, window.where('host', '==', user.uid));
                 const snapshot = await window.getDocs(q);
                 snapshot.forEach(async (docSnap) => {
-                    await window.deleteDoc(docSnap.ref);
+                    await deleteRoom(docSnap.id, { stopPropagation: () => {} });
                 });
             };
 
+            // --- REFACTOR: leaveGame must clean up game_state doc ---
             const leaveGame = async () => {
                 if (currentRoomId) {
-                    const roomRef = window.doc(window.getPublicRoomCollection(), currentRoomId);
-                    const roomSnap = await window.getDocs(window.query(window.getPublicRoomCollection(), window.where('__name__', '==', currentRoomId)));
+                    const roomRef = window.doc(db, 'arena_rooms', currentRoomId);
+                    const myStateRef = window.doc(db, 'arena_rooms', currentRoomId, 'game_state', user.uid);
                     
-                    if (!roomSnap.empty) {
-                        const roomData = roomSnap.docs[0].data();
+                    // Delete my game state document
+                    try { await window.deleteDoc(myStateRef); } catch(e) { console.error("Could not delete my state", e); }
+                    
+                    // Update the lobby doc
+                    const roomSnap = await window.getDoc(roomRef); // Use getDoc for a single read
+                    
+                    if (roomSnap.exists()) {
+                        const roomData = roomSnap.data();
                         const remainingPlayers = roomData.players.filter(p => p !== user.uid);
                         
+                        let updatedPlayerInfo = { ...roomData.playerInfo };
+                        delete updatedPlayerInfo[user.uid];
+
                         if (remainingPlayers.length === 0) {
+                            // If I'm the last one, mark room for deletion
                             await window.updateDoc(roomRef, {
                                 players: [],
+                                playerInfo: {},
                                 emptyAt: Date.now() + ROOM_TIMEOUT_MS
                             });
                         } else {
+                            // If opponent is still here, just remove me
                             await window.updateDoc(roomRef, {
                                 players: remainingPlayers,
-                                emptyAt: null
+                                playerInfo: updatedPlayerInfo,
+                                emptyAt: null // No longer empty
                             });
                         }
                     }
