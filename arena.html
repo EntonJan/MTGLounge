@@ -208,6 +208,90 @@
                 </div>
             );
         };
+        
+        const CardContextMenu = ({ x, y, card, battlefield, onClose, onUpdateCounters, onMoveToZone, onToggleTap }) => {
+            const tapLabel = card.isTapped ? 'Untap' : 'Tap';
+            
+            // Helper to generate a counter option set
+            const counterOptions = (type, label) => [
+                { label: `${label} (+1)`, action: () => onUpdateCounters(card.instanceId, battlefield, type, 1) },
+                { label: `${label} (-1)`, action: () => onUpdateCounters(card.instanceId, battlefield, type, -1) },
+            ];
+            
+            const allOptions = [
+                { label: tapLabel, action: () => onToggleTap(card.instanceId, battlefield) },
+                
+                { label: '--- Counters (+1/+1) ---', isSeparator: true },
+                ...counterOptions('plus1', '+1/+1 Counter'),
+                
+                { label: '--- Counters (-1/-1) ---', isSeparator: true },
+                ...counterOptions('minus1', '-1/-1 Counter'),
+                
+                { label: '--- Generic Counters ---', isSeparator: true },
+                ...counterOptions('generic', 'Generic Counter'),
+                
+                { label: '--- Move ---', isSeparator: true },
+                { label: 'Move to Hand', action: () => onMoveToZone(card, 'hand') },
+                { label: 'Move to Graveyard', action: () => onMoveToZone(card, 'graveyard') },
+                { label: 'Move to Exile', action: () => onMoveToZone(card, 'exile') },
+                { label: 'Move to Library Top', action: () => onMoveToZone(card, 'library_top') },
+                { label: 'Move to Library Bottom', action: () => onMoveToZone(card, 'library_bottom') },
+            ];
+
+            return (
+                <div className="fixed z-[200] bg-gray-800 border border-gray-600 rounded shadow-xl py-1 min-w-[200px] max-w-[200px] overflow-auto" style={{ left: x, top: y }} onMouseLeave={onClose}>
+                    <div className="px-4 py-2 text-sm text-yellow-400 font-bold border-b border-gray-700 truncate" title={card.name}>{card.name}</div>
+                    {allOptions.map((opt, i) => (
+                        <React.Fragment key={i}>
+                            {opt.isSeparator ? (
+                                <div className="text-gray-500 text-[10px] uppercase font-semibold px-4 pt-2 pb-1">{opt.label.replace(/---/g, '').trim()}</div>
+                            ) : (
+                                <button key={opt.label} onClick={() => { opt.action(); onClose(); }} className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700">
+                                    {opt.label}
+                                </button>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+            );
+        };
+        
+        const CounterDisplay = ({ counters }) => {
+            const counterElements = [];
+            
+            Object.keys(counters).forEach(type => {
+                const count = counters[type];
+                if (count > 0) {
+                    let color = 'bg-gray-500';
+                    let label = type.substring(0, 1).toUpperCase(); 
+
+                    if (type === 'plus1') {
+                        color = 'bg-green-600';
+                        label = `+${count}`;
+                    } else if (type === 'minus1') {
+                        color = 'bg-red-600';
+                        label = `-${count}`;
+                    } else { // Generic
+                         color = 'bg-yellow-600';
+                         label = count;
+                    }
+                    
+                    counterElements.push(
+                        <div key={type} className={`w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center shadow-lg ${color} border border-white/50`} title={`${count} ${type.replace(/([A-Z])/g, ' $1').toLowerCase()} counters`}>
+                            {label}
+                        </div>
+                    );
+                }
+            });
+
+            if (counterElements.length === 0) return null;
+            
+            return (
+                <div className="absolute top-1 left-1 flex flex-col gap-1 z-30 pointer-events-none">
+                    {counterElements}
+                </div>
+            );
+        };
 
         const Coin = () => (
             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 border border-yellow-700 flex items-center justify-center shadow-lg coin-spin mx-2" title="Starting Player">
@@ -226,6 +310,7 @@
             const [topCardView, setTopCardView] = useState(null);
             const [myHandMinimized, setMyHandMinimized] = useState(false);
             const [oppHandMinimized, setOppHandMinimized] = useState(false);
+            const [contextMenu, setContextMenu] = useState(null); // New state for card context menu
             
             const [leaveGameModal, setLeaveGameModal] = useState(false);
             const [gameResult, setGameResult] = useState({ winner: '', confirmed: false });
@@ -277,13 +362,14 @@
                 console.log("Initializing Player...");
                 initializingRef.current = true;
                 
-                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false }));
+                // Initialize cards with counters: {}
+                const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: {} }));
                 for (let i = initLibrary.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [initLibrary[i], initLibrary[j]] = [initLibrary[j], initLibrary[i]];
                 }
                 const startingHand = initLibrary.splice(0, 7);
-                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true }] : [];
+                const commander = deck.commander ? [{ ...deck.commander, instanceId: generateId(), isTapped: false, isCommander: true, counters: {} }] : [];
 
                 const initialPlayerState = {
                     life: 40, commanderDamage: 0, cmdTax: 0,
@@ -299,21 +385,23 @@
                 .catch(e => { initializingRef.current = false; });
             }, [roomState, deck, loading]);
 
-            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized]);
+            useEffect(() => { lucide.createIcons(); }, [roomState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, contextMenu]);
 
             const myState = roomState?.gameState?.[user.uid];
             const opponentId = roomState?.players?.find(p => p !== user.uid);
             const opponentState = roomState?.gameState?.[opponentId];
-            const opponentName = roomState?.players?.find(p => p !== user.uid) === roomState?.host ? roomState?.hostName : 'Opponent';
+            const opponentPlayer = roomState?.playerDecks?.[opponentId];
+            const opponentName = opponentPlayer?.name || 'Opponent';
             const startingPlayerId = roomState?.startingPlayer;
 
             // Mulligan Visibility Logic
             const showMulligan = useMemo(() => {
                 if (!myState) return false;
+                // Only show mulligan if player hasn't played a card or drawn an extra card
                 const initialSize = deck.cards.length;
                 const currentLibSize = myState.library.length;
                 const hasDrawn = currentLibSize < (initialSize - 7);
-                const hasPlayed = (myState.battlefieldUpper?.length || 0) > 0 || (myState.battlefieldLower?.length || 0) > 0 || (myState.graveyard?.length || 0) > 0;
+                const hasPlayed = (myState.battlefieldUpper?.length || 0) > 0 || (myState.battlefieldLower?.length || 0) > 0 || (myState.graveyard?.length || 0) > 0 || (myState.exile?.length || 0) > 0;
                 return !hasDrawn && !hasPlayed;
             }, [myState, deck]);
 
@@ -359,11 +447,13 @@
                 if (x === undefined || y === undefined) {
                     const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
                     const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
+                    // Slightly random position for new cards
                     x = bfWidth - 360 - (Math.random() * 50); 
                     y = (bfHeight / 2) - 60 + (Math.random() * 50); 
                 }
 
-                const newCard = { ...card, isTapped: false, x, y };
+                // Initialize counters if missing, otherwise keep existing for moved cards
+                const newCard = { ...card, isTapped: false, x, y, counters: card.counters || {} }; 
                 let updates = {};
                 
                 if (targetBattlefield === 'upper') {
@@ -385,6 +475,31 @@
 
                 updateMyState(updates);
             };
+            
+            const createToken = () => {
+                const defaultToken = {
+                    id: generateId(), 
+                    instanceId: generateId(),
+                    name: "Token (1/1 Saproling)",
+                    image_url: "https://c1.scryfall.com/file/scryfall-cards/normal/front/1/7/17d0d0f4-5f15-40b9-be1a-d4c39af31f47.jpg?1562947158", // Generic Saproling token
+                    type_line: "Creature — Saproling",
+                    power: "1",
+                    toughness: "1",
+                    isToken: true,
+                    isTapped: false,
+                    counters: {}
+                };
+                
+                // Place it directly on the lower battlefield
+                const bfWidth = playerLowerBattlefieldRef.current?.clientWidth || window.innerWidth;
+                const bfHeight = playerLowerBattlefieldRef.current?.clientHeight || 300;
+                const x = bfWidth / 2 + (Math.random() * 100) - 50; 
+                const y = bfHeight / 2 + (Math.random() * 50) - 25; 
+                
+                const tokenOnBattlefield = { ...defaultToken, x, y };
+
+                updateMyState({ battlefieldLower: [...(myState.battlefieldLower || []), tokenOnBattlefield] });
+            };
 
             const moveCardToZone = (card, toZone) => {
                 const filter = c => c.instanceId !== card.instanceId;
@@ -398,12 +513,18 @@
                     library: myState.library.filter(filter)
                 };
 
-                if (toZone === 'graveyard') updates.graveyard = [card, ...updates.graveyard];
-                else if (toZone === 'exile') updates.exile = [card, ...updates.exile];
-                else if (toZone === 'hand') updates.hand = [...updates.hand, card];
-                else if (toZone === 'command') updates.commandZone = [card, ...updates.commandZone];
-                else if (toZone === 'library_top') updates.library = [card, ...updates.library];
-                else if (toZone === 'library_bottom') updates.library = [...updates.library, card];
+                // Remove positional data and counters when moving off battlefield
+                const cardForNewZone = { ...card };
+                delete cardForNewZone.x;
+                delete cardForNewZone.y;
+                if (toZone !== 'command') delete cardForNewZone.counters; // keep counters in command zone
+
+                if (toZone === 'graveyard') updates.graveyard = [cardForNewZone, ...updates.graveyard];
+                else if (toZone === 'exile') updates.exile = [cardForNewZone, ...updates.exile];
+                else if (toZone === 'hand') updates.hand = [...updates.hand, cardForNewZone];
+                else if (toZone === 'command') updates.commandZone = [cardForNewZone, ...updates.commandZone];
+                else if (toZone === 'library_top') updates.library = [cardForNewZone, ...updates.library];
+                else if (toZone === 'library_bottom') updates.library = [...updates.library, cardForNewZone];
 
                 updateMyState(updates);
             };
@@ -416,6 +537,32 @@
                     const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
                     updateMyState({ battlefieldLower: bf });
                 }
+                setContextMenu(null); // Close menu after tap
+            };
+            
+            const updateCardCounters = (cardId, battlefield, counterType, delta) => {
+                let zoneKey = battlefield === 'upper' ? 'battlefieldUpper' : 'battlefieldLower';
+                const newZone = (myState[zoneKey] || []).map(c => {
+                    if (c.instanceId === cardId) {
+                        const newCounters = { ...c.counters };
+                        newCounters[counterType] = (newCounters[counterType] || 0) + delta;
+                        if (newCounters[counterType] < 0) newCounters[counterType] = 0; // Prevent negative counter counts
+                        return { ...c, counters: newCounters };
+                    }
+                    return c;
+                });
+                updateMyState({ [zoneKey]: newZone });
+            };
+
+            const handleCardContextMenu = (e, card, zone, battlefield) => {
+                e.preventDefault();
+                setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    card,
+                    zone,
+                    battlefield
+                });
             };
 
             const handleLeaveGame = () => {
@@ -519,12 +666,8 @@
                 e.preventDefault();
                 if (!draggedCard) return;
                 const rect = battlefieldRef.current.getBoundingClientRect();
-                let x = e.clientX - rect.left - 45;
-                let y = e.clientY - rect.top - 60;
-
-                if (targetBattlefield === 'lower') {
-                    if (x < 240) x = 240;
-                }
+                let x = e.clientX - rect.left - 45; // 45 = half card width
+                let y = e.clientY - rect.top - 60;  // 60 = half card height
 
                 if (draggedCard.fromZone === 'battlefieldUpper' || draggedCard.fromZone === 'battlefieldLower') {
                     const updates = {};
@@ -568,6 +711,18 @@
                                 { label: 'Shuffle Library', action: shuffleLibrary },
                                 { label: 'View Entire Library', action: () => setViewingZone('library') }
                             ]} 
+                        />
+                    )}
+                    
+                    {contextMenu && (
+                        <CardContextMenu 
+                            x={contextMenu.x} y={contextMenu.y} 
+                            card={contextMenu.card} 
+                            battlefield={contextMenu.battlefield}
+                            onClose={() => setContextMenu(null)}
+                            onUpdateCounters={updateCardCounters}
+                            onMoveToZone={moveCardToZone}
+                            onToggleTap={toggleTap}
                         />
                     )}
 
@@ -656,6 +811,7 @@
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
+                                    <CounterDisplay counters={card.counters || {}} />
                                 </div>
                             )) || <div className="flex items-center justify-center h-full text-red-500/20 text-sm font-bold uppercase tracking-widest">Opponent Territory</div>}
                          </div>
@@ -699,13 +855,14 @@
                                         <h4 className="text-red-400 text-sm font-bold mb-2 flex-shrink-0">Command Zone</h4>
                                         <div className="flex flex-wrap gap-2 content-start">
                                             {opponentState.commandZone.map(card => (
-                                                <div key={card.instanceId} className="flex flex-col items-center">
+                                                <div key={card.instanceId} className="flex flex-col items-center relative">
                                                     <CardImage 
                                                         src={card.image_url} 
                                                         className="w-12 h-16 border border-yellow-500 flex-shrink-0"
                                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                                         onMouseLeave={() => setHoveredCard(null)}
                                                     />
+                                                    <CounterDisplay counters={card.counters || {}} />
                                                 </div>
                                             ))}
                                         </div>
@@ -744,6 +901,7 @@
                                     onMouseEnter={() => setHoveredCard(card.image_url)}
                                     onMouseLeave={() => setHoveredCard(null)}
                                 />
+                                <CounterDisplay counters={card.counters || {}} />
                             </div>
                         ))}
 
@@ -760,6 +918,7 @@
                                     style={{ left: card.x, top: card.y }}
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, card, 'battlefieldUpper')}
+                                    onContextMenu={(e) => handleCardContextMenu(e, card, 'battlefieldUpper', 'upper')}
                                 >
                                     <CardImage 
                                         src={card.image_url} 
@@ -768,6 +927,7 @@
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
+                                    <CounterDisplay counters={card.counters || {}} />
                                 </div>
                             ))}
                         </div>
@@ -788,6 +948,7 @@
                                     style={{ left: card.x, top: card.y }}
                                     draggable
                                     onDragStart={(e) => handleDragStart(e, card, 'battlefieldLower')}
+                                    onContextMenu={(e) => handleCardContextMenu(e, card, 'battlefieldLower', 'lower')}
                                 >
                                     <CardImage 
                                         src={card.image_url} 
@@ -796,6 +957,7 @@
                                         onMouseEnter={() => setHoveredCard(card.image_url)}
                                         onMouseLeave={() => setHoveredCard(null)}
                                     />
+                                    <CounterDisplay counters={card.counters || {}} />
                                 </div>
                             ))}
                         </div>
@@ -894,7 +1056,8 @@
                                         key={card.instanceId}
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, card, 'command')}
-                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center"
+                                        className="cursor-pointer flex-shrink-0 flex flex-col items-center relative"
+                                        onContextMenu={(e) => handleCardContextMenu(e, card, 'commandZone', 'lower')} // Commander can have counters
                                     >
                                         <CardImage 
                                             src={card.image_url} 
@@ -902,6 +1065,7 @@
                                             onMouseEnter={() => setHoveredCard(card.image_url)}
                                             onMouseLeave={() => setHoveredCard(null)}
                                         />
+                                        <CounterDisplay counters={card.counters || {}} />
                                         {card.isCommander && (
                                             <div className="text-yellow-400 text-[10px] font-bold mt-1">Tax: {myState.cmdTax || 0}</div>
                                         )}
@@ -965,6 +1129,7 @@
                         <div className="flex gap-2 flex-shrink-0">
                             <button onClick={drawCard} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Draw</button>
                             <button onClick={shuffleLibrary} className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Shuffle</button>
+                            <button onClick={createToken} className="flex-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-xs font-bold shadow-lg">Token</button>
                         </div>
                     </div>
                 </div>
