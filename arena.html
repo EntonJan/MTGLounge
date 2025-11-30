@@ -440,6 +440,7 @@
                     'W': 'W', 'U': 'U', 'B': 'B', 'R': 'R', 'G': 'G'
                 };
                 const colors = [];
+                // Minified deck might use color_identity array directly
                 const colorIdentity = deckData.commander.color_identity || [];
                 colorIdentity.forEach(c => {
                     if (colorMap[c]) colors.push(c);
@@ -1041,8 +1042,45 @@
 
             useEffect(() => { lucide.createIcons(); }, [view, rooms, decks]);
 
+            // --- MINIFY HELPER START ---
+            // Helper function to strip down deck data before saving to Firebase (prevents 1MB limit error)
+            const minifyDeck = (fullDeck) => {
+                if (!fullDeck) return null;
+
+                const minifyCard = (card) => {
+                    if (!card) return null;
+                    return {
+                        id: card.id,
+                        name: card.name,
+                        // Ensure we grab the correct image URL immediately so we don't store the whole nested structure
+                        image_url: card.image_url || card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || 'https://placehold.co/200x280?text=No+Image',
+                        cmc: card.cmc || 0,
+                        type_line: card.type_line || '',
+                        color_identity: card.color_identity || [],
+                        power: card.power || '',
+                        toughness: card.toughness || '',
+                        oracle_text: card.oracle_text || '',
+                        instanceId: card.instanceId // Keep this if it exists
+                    };
+                };
+
+                return {
+                    id: fullDeck.id,
+                    name: fullDeck.name,
+                    commander: minifyCard(fullDeck.commander),
+                    cards: fullDeck.cards ? fullDeck.cards.map(minifyCard) : [],
+                    // We don't need sideboard in the active game usually, so send empty to save space
+                    sideboard: [] 
+                };
+            };
+            // --- MINIFY HELPER END ---
+
             const createRoom = async () => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
+                
+                // Use minified deck to save space
+                const tinyDeck = minifyDeck(selectedDeck);
+
                 const roomRef = await window.addDoc(window.getPublicRoomCollection(), {
                     host: user.uid, 
                     hostName: user.displayName || user.email.split('@')[0],
@@ -1050,7 +1088,7 @@
                     createdAt: Date.now(), 
                     gameState: {},
                     emptyAt: null,
-                    playerDecks: { [user.uid]: selectedDeck }
+                    playerDecks: { [user.uid]: tinyDeck } // Send tinyDeck
                 });
                 setCurrentRoomId(roomRef.id);
                 setView('game');
@@ -1058,13 +1096,17 @@
 
             const joinRoom = async (roomId) => {
                 if (!selectedDeck) { alert("Select a deck first"); return; }
+                
+                // Use minified deck to save space
+                const tinyDeck = minifyDeck(selectedDeck);
+
                 const roomRef = window.doc(window.getPublicRoomCollection(), roomId);
                 const room = rooms.find(r => r.id === roomId);
                 
                 await window.updateDoc(roomRef, { 
                     players: [room.players[0], user.uid],
                     emptyAt: null,
-                    [`playerDecks.${user.uid}`]: selectedDeck
+                    [`playerDecks.${user.uid}`]: tinyDeck // Send tinyDeck
                 });
                 setCurrentRoomId(roomId);
                 setView('game');
@@ -1113,13 +1155,7 @@
             };
 
             if (view === 'game' && currentRoomId && selectedDeck) {
-                return (
-                    <GameSim 
-                        deck={selectedDeck} 
-                        onLeave={leaveGame} 
-                        roomId={currentRoomId} 
-                    />
-                );
+                return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
             }
 
             return (
