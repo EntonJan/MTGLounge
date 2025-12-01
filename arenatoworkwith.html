@@ -372,15 +372,24 @@ const GameSim = ({ deck, onLeave, roomId }) => {
             }, [roomId, db, opponentId]);
 
             
-            // --- REFACTOR: Split state syncing into multiple listeners ---
+// --- REFACTOR: Split state syncing into multiple listeners ---
 
-            // Listener 1: Sync the main lobby document (FIXED with error handler)
+            // Listener 1: Sync the main lobby document (FIXED with better logging)
             useEffect(() => {
+                console.log("🎮 Setting up lobby state listener for room:", roomId);
+                
                 const unsubscribe = window.onSnapshot(
                     roomRef, 
                     (docSnap) => {
                         if (docSnap.exists()) {
                             const data = docSnap.data();
+                            console.log("📡 Lobby state updated:", {
+                                players: data.players,
+                                playerCount: data.players?.length,
+                                host: data.host,
+                                hasPlayerInfo: !!data.playerInfo
+                            });
+                            
                             setLobbyState(data);
                             
                             if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
@@ -388,75 +397,109 @@ const GameSim = ({ deck, onLeave, roomId }) => {
                                 setLeaveGameModal(true);
                             }
                         } else { 
-                            console.log("Room no longer exists, leaving game.");
+                            console.log("❌ Room no longer exists, leaving game.");
                             onLeave(); 
                         }
                     },
                     (error) => {
-                        console.error("Room snapshot error:", error);
+                        console.error("⚠️ Room snapshot error:", error);
                         if (error.code === 'permission-denied') {
-                            console.log("Permission denied - room may have been cleaned up. Leaving game.");
+                            console.log("🔒 Permission denied - room may have been cleaned up. Leaving game.");
                             onLeave();
                         }
                     }
                 );
-                return () => unsubscribe();
+                
+                return () => {
+                    console.log("🧹 Cleaning up lobby state listener");
+                    unsubscribe();
+                };
             }, [roomRef, onLeave, user.uid]);
             
             // Listener 2: Sync my own game state (FIXED with error handler)
             useEffect(() => {
+                console.log("👤 Setting up my state listener");
+                
                 const unsubscribe = window.onSnapshot(
                     myStateRef, 
                     (docSnap) => {
                         if (docSnap.exists()) {
+                            console.log("✅ My state loaded successfully");
                             setMyState(docSnap.data());
                             hasInitializedRef.current = true;
                         } else {
+                            console.log("⏳ My state not created yet");
                             setMyState(null);
                         }
                         setLoading(false);
                     },
                     (error) => {
-                        console.error("My state snapshot error:", error);
+                        console.error("⚠️ My state snapshot error:", error);
                         if (error.code === 'permission-denied') {
-                            console.log("Permission denied on my state - game may be ending.");
+                            console.log("🔒 Permission denied on my state - game may be ending.");
                             setLoading(false);
                         }
                     }
                 );
-                return () => unsubscribe();
+                return () => {
+                    console.log("🧹 Cleaning up my state listener");
+                    unsubscribe();
+                };
             }, [myStateRef]);
             
-            // Listener 3: Sync opponent's game state (FIXED with error handler)
+            // Listener 3: Sync opponent's game state (FIXED with better logging)
             useEffect(() => {
                 if (!opponentStateRef) {
+                    console.log("⏳ No opponent yet (waiting for player 2)");
                     setOpponentState(null);
                     return;
                 }
+                
+                console.log("👥 Setting up opponent state listener for:", opponentId);
+                
                 const unsubscribe = window.onSnapshot(
                     opponentStateRef, 
                     (docSnap) => {
                         if (docSnap.exists()) {
+                            console.log("✅ Opponent state loaded successfully");
                             setOpponentState(docSnap.data());
                         } else {
+                            console.log("⏳ Opponent state not initialized yet");
                             setOpponentState(null);
                         }
                     },
                     (error) => {
-                        console.error("Opponent state snapshot error:", error);
+                        console.error("⚠️ Opponent state snapshot error:", error);
                         if (error.code === 'permission-denied') {
-                            console.log("Permission denied on opponent state - they may have left.");
+                            console.log("🔒 Permission denied on opponent state - they may have left.");
                             setOpponentState(null);
                         }
                     }
                 );
-                return () => unsubscribe();
-            }, [opponentStateRef]);
+                
+                return () => {
+                    console.log("🧹 Cleaning up opponent state listener");
+                    unsubscribe();
+                };
+            }, [opponentStateRef, opponentId]);
+
+            // NEW: Monitor when players change
+            useEffect(() => {
+                if (lobbyState) {
+                    console.log("🔄 Lobby update:", {
+                        totalPlayers: lobbyState.players?.length,
+                        players: lobbyState.players,
+                        opponentId: opponentId,
+                        hasOpponentState: !!opponentState
+                    });
+                }
+            }, [lobbyState?.players, opponentId, opponentState]);
 
 
             // Host Logic for Random Start Player (depends on lobbyState)
             useEffect(() => {
                 if (lobbyState && lobbyState.host === user.uid && !lobbyState.startingPlayer && lobbyState.players.length === 2) {
+                    console.log("🎲 Host assigning starting player");
                     const starter = Math.random() < 0.5 ? lobbyState.players[0] : lobbyState.players[1];
                     window.updateDoc(roomRef, { startingPlayer: starter });
                 }
@@ -470,7 +513,7 @@ const GameSim = ({ deck, onLeave, roomId }) => {
                 // Don't run if another init is in progress
                 if (initializingRef.current) return;
                 
-                console.log("Initializing Player State in Subcollection...");
+                console.log("🎬 Initializing Player State in Subcollection...");
                 initializingRef.current = true;
                 
                 const initLibrary = deck.cards.map(c => ({ ...c, instanceId: generateId(), isTapped: false, counters: [] }));
@@ -491,18 +534,57 @@ const GameSim = ({ deck, onLeave, roomId }) => {
                 // Write to the new document: /arena_rooms/<roomId>/game_state/<user.uid>
                 window.setDoc(myStateRef, initialPlayerState)
                     .then(() => {
-                        console.log("Player state initialized.");
-                        hasInitializedRef.current = true; // We've done it
+                        console.log("✅ Player state initialized successfully");
+                        hasInitializedRef.current = true;
                         initializingRef.current = false;
                     })
                     .catch(e => {
-                        console.error("Failed to initialize player state:", e);
+                        console.error("❌ Failed to initialize player state:", e);
                         initializingRef.current = false; 
                     });
-            }, [loading, lobbyState, myState, deck, myStateRef]); // Depends on all state sources
+            }, [loading, lobbyState, myState, deck, myStateRef]);
 
             useEffect(() => { lucide.createIcons(); }, [lobbyState, myState, opponentState, opponentMaximized, viewingZone, leaveGameModal, myHandMinimized, oppHandMinimized, isTokenModalOpen, cardMenu]);
 
+            // --- REFACTOR: Reading state from new sources ---
+            const opponentName = lobbyState?.playerInfo?.[opponentId]?.deckName || 'Opponent';
+            const startingPlayerId = lobbyState?.startingPlayer;
+
+            // Mulligan Visibility Logic
+            const showMulligan = useMemo(() => {
+                if (!myState) return false;
+                const initialSize = deck.cards.length;
+                const currentLibSize = myState.library.length;
+                const hasDrawn = currentLibSize < (initialSize - 7);
+                const hasPlayed = (myState.battlefieldUpper?.length || 0) > 0 || (myState.battlefieldLower?.length || 0) > 0 || (myState.graveyard?.length || 0) > 0;
+                return !hasDrawn && !hasPlayed;
+            }, [myState, deck]);
+
+            // --- IMPROVED: Better loading check with diagnostic info ---
+            if (loading || !myState || !myState.hand) {
+                return (
+                    <div className="h-full flex flex-col items-center justify-center text-yellow-400">
+                        <div className="loader mb-4"></div>
+                        <p>Syncing Game State...</p>
+                        {lobbyState && (
+                            <div className="mt-4 text-sm text-gray-400 space-y-1 text-center">
+                                <p>Players in room: {lobbyState.players?.length || 0}/2</p>
+                                <p>Your state: {myState ? '✅ Loaded' : '⏳ Loading...'}</p>
+                                {opponentId && <p>Opponent: {opponentState ? '✅ Ready' : '⏳ Initializing...'}</p>}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            // Add diagnostic logging
+            console.log("🎮 GameSim rendering:", {
+                myStateExists: !!myState,
+                opponentStateExists: !!opponentState,
+                lobbyPlayers: lobbyState?.players?.length,
+                opponentId: opponentId,
+                opponentName: opponentName
+            });
             // --- REFACTOR: Reading state from new sources ---
             const opponentName = lobbyState?.playerInfo?.[opponentId]?.deckName || 'Opponent';
             const startingPlayerId = lobbyState?.startingPlayer;
@@ -1575,3 +1657,4 @@ const GameSim = ({ deck, onLeave, roomId }) => {
     </script>
 </body>
 </html>
+
