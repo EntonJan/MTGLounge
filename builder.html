@@ -628,12 +628,49 @@
                 }
             };
 
+            // *** FIXED PARSELINE FUNCTION ***
             const parseLine = (line) => {
-                let isFoil = false; let cleanLine = line;
-                if (/\*f\*|\*foil\*/i.test(line)) { isFoil = true; cleanLine = line.replace(/\*f\*|\*foil\*/gi, '').trim(); }
-                const match = cleanLine.match(/^(\d+)?\s*([^(]+?)\s*(?:\(([\w\d]{3,4})\))?\s*([\w\d]+)?\s*$/);
-                if (!match) return null;
-                return { count: parseInt(match[1] || '1'), name: match[2].trim(), set: match[3]?.toLowerCase(), num: match[4], foil: isFoil };
+                if (!line || !line.trim()) return null;
+                let text = line.trim();
+                let isFoil = false;
+                
+                // 1. Detect and remove Foil tag
+                if (/\*f\*|\*foil\*/i.test(text)) {
+                    isFoil = true;
+                    text = text.replace(/\*f\*|\*foil\*/gi, '').trim();
+                }
+                
+                // 2. Extract Count (start of line)
+                let count = 1;
+                const countMatch = text.match(/^(\d+)[x\s]+/i);
+                if (countMatch) {
+                    count = parseInt(countMatch[1]);
+                    text = text.substring(countMatch[0].length).trim();
+                }
+                
+                // 3. Extract Set and Collector Number (End of line)
+                // This regex looks for patterns like: "Name (SET) 123" or "Name (SET)"
+                // It is much more robust than the previous one because it anchors to the end ($)
+                // and accepts whatever is left at the start as the Name.
+                
+                let set = null;
+                let num = null;
+                
+                const metaMatch = text.match(/\s+\(([a-zA-Z0-9]{3,5})\)(?:\s+([a-zA-Z0-9]+))?$/);
+                
+                if (metaMatch) {
+                    set = metaMatch[1].toLowerCase();
+                    num = metaMatch[2] || null;
+                    // Everything before the match is the name
+                    text = text.substring(0, metaMatch.index).trim();
+                }
+                
+                // If text is not empty, return the parsed object
+                if (text) {
+                    return { count, name: text, set, num, foil: isFoil };
+                }
+                
+                return null;
             };
 
             // *** FIX: IMPROVED importBatch with better error handling and progress feedback ***
