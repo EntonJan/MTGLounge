@@ -123,16 +123,13 @@
         window.doc = doc;
         window.setDoc = setDoc;
         window.getDocs = getDocs;
-        window.getDoc = getDoc; // <-- Make getDoc available
+        window.getDoc = getDoc;
         window.deleteDoc = deleteDoc;
         window.onSnapshot = onSnapshot;
         window.addDoc = addDoc;
         window.updateDoc = updateDoc;
         window.query = query;
         window.where = where;
-        
-        // --- REFACTOR: This helper is no longer needed, we will reference `db` directly
-        // window.getPublicRoomCollection = () => collection(db, 'arena_rooms');
 
         const renderAuthCheck = () => {
              onAuthStateChanged(auth, (user) => {
@@ -335,8 +332,7 @@
                 <span className="text-yellow-900 font-bold text-xs">1</span>
             </div>
         );
-
-        const GameSim = ({ deck, onLeave, roomId }) => {
+const GameSim = ({ deck, onLeave, roomId }) => {
             // --- REFACTOR: State is now split ---
             const [lobbyState, setLobbyState] = useState(null); // Data from the main room doc
             const [myState, setMyState] = useState(null); // Data from .../game_state/<my_uid>
@@ -378,49 +374,82 @@
             
             // --- REFACTOR: Split state syncing into multiple listeners ---
 
-            // Listener 1: Sync the main lobby document
+            // Listener 1: Sync the main lobby document (FIXED with error handler)
             useEffect(() => {
-                const unsubscribe = window.onSnapshot(roomRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        setLobbyState(data);
-                        
-                        if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
-                            setGameResult(data.gameResult);
-                            setLeaveGameModal(true);
+                const unsubscribe = window.onSnapshot(
+                    roomRef, 
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            setLobbyState(data);
+                            
+                            if (data.gameResult && !data.gameResult.confirmed && data.gameResult.submittedBy !== user.uid) {
+                                setGameResult(data.gameResult);
+                                setLeaveGameModal(true);
+                            }
+                        } else { 
+                            console.log("Room no longer exists, leaving game.");
+                            onLeave(); 
                         }
-                    } else { onLeave(); } // Room was deleted
-                });
+                    },
+                    (error) => {
+                        console.error("Room snapshot error:", error);
+                        if (error.code === 'permission-denied') {
+                            console.log("Permission denied - room may have been cleaned up. Leaving game.");
+                            onLeave();
+                        }
+                    }
+                );
                 return () => unsubscribe();
             }, [roomRef, onLeave, user.uid]);
             
-            // Listener 2: Sync my own game state
+            // Listener 2: Sync my own game state (FIXED with error handler)
             useEffect(() => {
-                const unsubscribe = window.onSnapshot(myStateRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        setMyState(docSnap.data());
-                        hasInitializedRef.current = true; // Mark as initialized once we have data
-                    } else {
-                        setMyState(null); // My state was deleted or not created yet
+                const unsubscribe = window.onSnapshot(
+                    myStateRef, 
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            setMyState(docSnap.data());
+                            hasInitializedRef.current = true;
+                        } else {
+                            setMyState(null);
+                        }
+                        setLoading(false);
+                    },
+                    (error) => {
+                        console.error("My state snapshot error:", error);
+                        if (error.code === 'permission-denied') {
+                            console.log("Permission denied on my state - game may be ending.");
+                            setLoading(false);
+                        }
                     }
-                    setLoading(false); // We can stop loading once we check for my state
-                });
+                );
                 return () => unsubscribe();
             }, [myStateRef]);
             
-            // Listener 3: Sync opponent's game state (depends on opponentId)
+            // Listener 3: Sync opponent's game state (FIXED with error handler)
             useEffect(() => {
                 if (!opponentStateRef) {
-                    setOpponentState(null); // No opponent, no state
+                    setOpponentState(null);
                     return;
                 }
-                const unsubscribe = window.onSnapshot(opponentStateRef, (docSnap) => {
-                    if (docSnap.exists()) {
-                        setOpponentState(docSnap.data());
-                    } else {
-                        setOpponentState(null); // Opponent left or state not created
+                const unsubscribe = window.onSnapshot(
+                    opponentStateRef, 
+                    (docSnap) => {
+                        if (docSnap.exists()) {
+                            setOpponentState(docSnap.data());
+                        } else {
+                            setOpponentState(null);
+                        }
+                    },
+                    (error) => {
+                        console.error("Opponent state snapshot error:", error);
+                        if (error.code === 'permission-denied') {
+                            console.log("Permission denied on opponent state - they may have left.");
+                            setOpponentState(null);
+                        }
                     }
-                });
+                );
                 return () => unsubscribe();
             }, [opponentStateRef]);
 
@@ -662,13 +691,18 @@
                 updateMyState(updates);
             };
 
+            // FIXED: Toggle Tap Function
             const toggleTap = (id, battlefield) => {
                 if (battlefield === 'upper') {
-                    const bf = (myState.battlefieldUpper || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
-                    updateMyState({ battlefieldUpper: bf });
+                    const updatedCards = (myState.battlefieldUpper || []).map(card => 
+                        card.instanceId === id ? { ...card, isTapped: !card.isTapped } : card
+                    );
+                    updateMyState({ battlefieldUpper: updatedCards });
                 } else {
-                    const bf = (myState.battlefieldLower || []).map(c => c.instanceId === id ? { ...c, isTapped: !c.isTapped } : c);
-                    updateMyState({ battlefieldLower: bf });
+                    const updatedCards = (myState.battlefieldLower || []).map(card => 
+                        card.instanceId === id ? { ...card, isTapped: !card.isTapped } : card
+                    );
+                    updateMyState({ battlefieldLower: updatedCards });
                 }
             };
 
@@ -696,8 +730,7 @@
                 colorIdentity.forEach(c => { if (colorMap[c]) colors.push(c); });
                 return colors;
             };
-
-            // This logic is unchanged, but now reads from lobbyState.playerInfo
+// This logic is unchanged, but now reads from lobbyState.playerInfo
             const saveMatchToTrackers = async (winnerId) => {
                 try {
                     const myDeckColors = extractDeckColors(deck);
@@ -745,13 +778,27 @@
                 }
             };
 
+            // FIXED: Safe Game Result Confirmation
             const confirmGameResult = async () => {
-                await window.updateDoc(roomRef, {
-                    'gameResult.confirmed': true
-                });
-                await saveMatchToTrackers(gameResult.winner === 'draw' ? null : gameResult.winner);
-                setLeaveGameModal(false);
-                onLeave(); // This prop will handle cleanup
+                try {
+                    await window.updateDoc(roomRef, {
+                        'gameResult.confirmed': true
+                    });
+                    
+                    await saveMatchToTrackers(gameResult.winner === 'draw' ? null : gameResult.winner);
+                    
+                    setLeaveGameModal(false);
+                    
+                    // Small delay to ensure state updates complete
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    onLeave();
+                } catch (error) {
+                    console.error("Error confirming game result:", error);
+                    // Even if there's an error, try to leave gracefully
+                    setLeaveGameModal(false);
+                    onLeave();
+                }
             };
 
             const handleDragStart = (e, card, fromZone) => setDraggedCard({ card, fromZone });
@@ -791,19 +838,30 @@
                 setDraggedCard(null);
             };
 
+            // FIXED: Render Battlefield Card with proper tap handling
             const renderBattlefieldCard = (card, zone, isMine = false) => {
                 const zoneName = isMine ? zone : `opponent_${zone}`;
                 return (
                     <div 
                         key={card.instanceId} 
                         className="absolute cursor-pointer"
-                        style={{ left: card.x, top: isMine ? card.y : (zone === 'battlefieldLower' ? undefined : 10), bottom: isMine ? undefined : (zone === 'battlefieldLower' ? card.y : undefined) }}
+                        style={{ 
+                            left: card.x, 
+                            top: isMine ? card.y : (zone === 'battlefieldLower' ? undefined : 10), 
+                            bottom: isMine ? undefined : (zone === 'battlefieldLower' ? card.y : undefined) 
+                        }}
                         draggable={isMine}
                         onDragStart={(e) => isMine && handleDragStart(e, card, zone)}
                         onContextMenu={(e) => {
                             if (isMine) {
                                 e.preventDefault();
                                 setCardMenu({ x: e.clientX, y: e.clientY, card, zone });
+                            }
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (isMine) {
+                                toggleTap(card.instanceId, zone);
                             }
                         }}
                     >
@@ -819,7 +877,6 @@
                         <CardImage 
                             src={card.image_url} 
                             className={`w-[90px] h-[120px] card-shadow ${card.isTapped ? 'tapped' : 'untapped'} ${!isMine && zone === 'battlefieldUpper' ? 'border-2 border-red-500/50' : ''}`}
-                            onClick={() => isMine && toggleTap(card.instanceId, zone)}
                             onMouseEnter={() => setHoveredCard(card.image_url)}
                             onMouseLeave={() => setHoveredCard(null)}
                         />
@@ -968,7 +1025,7 @@
                             <div className="absolute top-4 left-2 z-40 w-56 flex flex-col gap-2 pointer-events-none">
                                 <div className="pointer-events-auto bg-red-900/80 backdrop-blur-sm p-4 rounded-lg border border-red-500/50 flex-shrink-0 shadow-lg">
                                     <div className="flex justify-between items-center mb-2">
-                                        <h4 className="text-red-400 text-sm font-bold">{opponentName}</h4> {/* Use opponentName */}
+                                        <h4 className="text-red-400 text-sm font-bold">{opponentName}</h4>
                                         {startingPlayerId === opponentId && <Coin />}
                                     </div>
                                     <div className="text-white text-sm space-y-1">
@@ -1011,8 +1068,7 @@
                             </div>
                         </>
                     )}
-
-                    {/* --- MIDDLE ZONE (SHARED BATTLEFIELD UPPER) --- */}
+{/* --- MIDDLE ZONE (SHARED BATTLEFIELD UPPER) --- */}
                     <div style={{ top: '33vh', height: '33vh' }} className="w-full absolute bg-blue-900/10 border-b-2 border-blue-500/30 overflow-hidden">
                         {/* --- REFACTOR: Read from opponentState --- */}
                         {opponentState?.battlefieldUpper?.map(card => (
@@ -1343,7 +1399,7 @@
                         commanderName: selectedDeck.commander?.name || 'Unknown'
                     }
                 });
-                setCurrentRoomId(roomId);
+                setCurrentRoomId(roomRef.id);
                 setView('game');
             };
 
@@ -1368,59 +1424,53 @@
                     await deleteRoom(docSnap.id, { stopPropagation: () => {} });
                 });
             };
-
-// ... (inside the App component)
-
-            // --- REFACTOR: leaveGame must clean up game_state doc ---
+// FIXED: Enhanced Leave Game Handler
             const leaveGame = async () => {
                 if (currentRoomId) {
                     const roomRef = window.doc(db, 'arena_rooms', currentRoomId);
                     const myStateRef = window.doc(db, 'arena_rooms', currentRoomId, 'game_state', user.uid);
                     
-                    // 1. Delete my game state document (Required to pass the new security rule check)
-                    try { 
-                        await window.deleteDoc(myStateRef); 
-                        console.log("Successfully deleted my player state document.");
+                    try {
+                        // 1. Delete my game state document first
+                        await window.deleteDoc(myStateRef);
+                        console.log("Successfully deleted player state document.");
                     } catch(e) { 
-                        // It's crucial for the user to leave, so we log the error but proceed.
-                        console.error("Could not delete my player state document. This might be a temporary permission issue or the document already gone:", e); 
+                        console.warn("Could not delete player state document:", e); 
                     }
                     
-                    // 2. Update the lobby doc
-                    const roomSnap = await window.getDoc(roomRef); // Use getDoc for a single read
-                    
-                    if (roomSnap.exists()) {
-                        const roomData = roomSnap.data();
-                        const remainingPlayers = roomData.players.filter(p => p !== user.uid);
+                    try {
+                        // 2. Update the lobby doc
+                        const roomSnap = await window.getDoc(roomRef);
                         
-                        let updatedPlayerInfo = { ...roomData.playerInfo };
-                        delete updatedPlayerInfo[user.uid];
+                        if (roomSnap.exists()) {
+                            const roomData = roomSnap.data();
+                            const remainingPlayers = roomData.players.filter(p => p !== user.uid);
+                            
+                            let updatedPlayerInfo = { ...roomData.playerInfo };
+                            delete updatedPlayerInfo[user.uid];
 
-                        if (remainingPlayers.length === 0) {
-                            // If I'm the last one, mark room for deletion
-                            await window.updateDoc(roomRef, {
-                                players: [],
-                                playerInfo: {},
-                                emptyAt: Date.now() + ROOM_TIMEOUT_MS
-                            });
-                            console.log("Room marked for cleanup timeout.");
-                        } else {
-                            // If opponent is still here, just remove me
-                            await window.updateDoc(roomRef, {
-                                players: remainingPlayers,
-                                playerInfo: updatedPlayerInfo,
-                                emptyAt: null // No longer empty
-                            });
-                            console.log("Player removed from room.");
+                            if (remainingPlayers.length === 0) {
+                                // If I'm the last one, delete the room entirely
+                                await window.deleteDoc(roomRef);
+                                console.log("Room deleted (no players remaining).");
+                            } else {
+                                // If opponent is still here, just remove me
+                                await window.updateDoc(roomRef, {
+                                    players: remainingPlayers,
+                                    playerInfo: updatedPlayerInfo,
+                                    emptyAt: null
+                                });
+                                console.log("Player removed from room.");
+                            }
                         }
+                    } catch(e) {
+                        console.warn("Could not update room document:", e);
                     }
                 }
                 
                 setView('lobby');
                 setCurrentRoomId(null);
             };
-
-// ... (rest of the App component)
 
             if (view === 'game' && currentRoomId && selectedDeck) {
                 return <GameSim deck={selectedDeck} onLeave={leaveGame} roomId={currentRoomId} />;
@@ -1505,7 +1555,7 @@
                                                             disabled={!selectedDeck || !!room.emptyAt}
                                                             className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded"
                                                         >
-                                                            {room.emptyAt ? 'Closing' : 'Join'}
+                                            {room.emptyAt ? 'Closing' : 'Join'}
                                                         </button>
                                                     )}
                                                 </div>
@@ -1525,4 +1575,3 @@
     </script>
 </body>
 </html>
-
