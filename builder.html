@@ -76,7 +76,7 @@
                 <header class="bg-gray-800 shadow-md p-4 sticky top-0 z-50 border-b border-gray-700">
                     <div class="max-w-7xl mx-auto flex justify-between items-center">
                         <div class="flex items-center space-x-4">
-                            <h1 class="text-2xl font-bold text-blue-400 tracking-tight">Deck Builder <span class="text-xs text-green-400 font-normal ml-1">Cloud V18.2</span></h1>
+                            <h1 class="text-2xl font-bold text-blue-400 tracking-tight">Deck Builder <span class="text-xs text-green-400 font-normal ml-1">Cloud V18.3</span></h1>
                             <button id="home-btn" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-full transition-colors shadow-sm" title="Home Menu">
                                 <i data-lucide="home" class="w-5 h-5"></i>
                             </button>
@@ -121,12 +121,10 @@
                     lucide.createIcons();
 
                     // 3. Mount React App
-                    // Ensure App is defined in the global scope (by Babel) before rendering
                     if (typeof App !== 'undefined') {
                         const root = ReactDOM.createRoot(document.getElementById('react-content'));
                         root.render(React.createElement(App, { user: user })); 
                     } else {
-                        // Retry briefly if Babel is still parsing (rare edge case)
                         setTimeout(() => {
                             if (typeof App !== 'undefined') {
                                 const root = ReactDOM.createRoot(document.getElementById('react-content'));
@@ -158,7 +156,10 @@
             try {
                 const response = await fetch(url, options);
                 if (!response.ok) {
-                    if (response.status === 429) await new Promise(r => setTimeout(r, 500));
+                    if (response.status === 429) {
+                        await new Promise(r => setTimeout(r, 500));
+                        throw new Error(`HTTP ${response.status}`);
+                    }
                     throw new Error(`HTTP ${response.status}`);
                 }
                 return response.json();
@@ -269,8 +270,7 @@
                 </div>
             );
         };
-
-        // --- MODALS (Scanner, Search, Import, Data) ---
+// --- MODALS (Scanner, Search, Import, Data) ---
         const CardScannerModal = ({ isOpen, onClose, onScannedName }) => {
             const videoRef = useRef(null);
             const canvasRef = useRef(null);
@@ -434,23 +434,28 @@
         const ImportModal = ({ isOpen, onClose, onImportBatch }) => {
             const [text, setText] = useState('');
             const [processing, setProcessing] = useState(false);
+            const [progress, setProgress] = useState('');
+            
             if (!isOpen) return null;
+            
             return (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
                     <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl">
                         <h2 className="text-2xl font-bold text-cyan-400 mb-4">Batch Import</h2>
                         <p className="text-xs text-gray-400 mb-2">Supported: "1 Sol Ring (C19) *F*", "1 Sol Ring *FOIL*"</p>
                         <textarea value={text} onChange={e => setText(e.target.value)} className="w-full h-48 bg-gray-900 p-2 rounded text-white border border-gray-700 mb-4" placeholder="Paste list here..."></textarea>
+                        {progress && <p className="text-sm text-yellow-400 mb-2">{progress}</p>}
                         <div className="flex justify-end gap-2">
-                            <button onClick={onClose} className="bg-gray-700 px-4 py-2 rounded">Cancel</button>
-                            <button onClick={async () => { setProcessing(true); await onImportBatch(text); setProcessing(false); onClose(); }} disabled={processing} className="bg-cyan-600 px-4 py-2 rounded">{processing ? 'Importing...' : 'Import'}</button>
+                            <button onClick={onClose} disabled={processing} className="bg-gray-700 px-4 py-2 rounded disabled:opacity-50">Cancel</button>
+                            <button onClick={async () => { setProcessing(true); setProgress(''); await onImportBatch(text, setProgress); setProcessing(false); setText(''); setProgress(''); }} disabled={processing} className="bg-cyan-600 px-4 py-2 rounded disabled:opacity-50">
+                                {processing ? <div className="flex items-center gap-2"><div className="loader w-4 h-4"></div> Importing...</div> : 'Import'}
+                            </button>
                         </div>
                     </div>
                 </div>
             );
         };
-
-        // --- MAIN APP COMPONENT ---
+// --- MAIN APP COMPONENT ---
         const App = ({ user }) => {
             const [decks, setDecks] = useState([]);
             const [currId, setCurrId] = useState(null);
@@ -498,7 +503,6 @@
                                     }
                                     remoteDecks = localDecks;
                                     showToast("Migration Success!");
-                                    // Optional: localStorage.removeItem(LOCAL_STORAGE_KEY_LEGACY);
                                 }
                             } catch (e) { console.error("Migration failed", e); }
                         }
@@ -632,33 +636,104 @@
                 return { count: parseInt(match[1] || '1'), name: match[2].trim(), set: match[3]?.toLowerCase(), num: match[4], foil: isFoil };
             };
 
-            const importBatch = async (rawText) => {
+            // *** FIX: IMPROVED importBatch with better error handling and progress feedback ***
+            const importBatch = async (rawText, setProgress) => {
                 const lines = rawText.split('\n').filter(l => l.trim() && !l.startsWith('//'));
-                if (!lines.length) return showToast("No cards found");
+                if (!lines.length) {
+                    showToast("No cards found");
+                    return;
+                }
+                
                 const reqs = lines.map(parseLine).filter(Boolean);
+                if (reqs.length === 0) {
+                    showToast("No valid card lines found");
+                    return;
+                }
+                
+                setProgress(`Parsing ${reqs.length} card entries...`);
+                
                 const ids = [];
-                reqs.forEach(r => { if (r.set && r.num) ids.push({ set: r.set, collector_number: r.num }); else if (r.set) ids.push({ name: r.name, set: r.set }); else ids.push({ name: r.name }); });
+                reqs.forEach(r => { 
+                    if (r.set && r.num) ids.push({ set: r.set, collector_number: r.num }); 
+                    else if (r.set) ids.push({ name: r.name, set: r.set }); 
+                    else ids.push({ name: r.name }); 
+                });
 
                 let found = [];
                 try {
-                    for (let i = 0; i < ids.length; i += 75) {
-                        const chunk = ids.slice(i, i + 75);
-                        const res = await fetchWithRetry(`${SCRYFALL_API_BASE}/cards/collection`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ identifiers: chunk }) });
-                        found = [...found, ...(res.data || [])];
-                        await new Promise(r => setTimeout(r, 100));
+                    const CHUNK_SIZE = 75;
+                    const totalChunks = Math.ceil(ids.length / CHUNK_SIZE);
+                    
+                    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+                        const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+                        setProgress(`Fetching cards from Scryfall (chunk ${chunkNum}/${totalChunks})...`);
+                        
+                        const chunk = ids.slice(i, i + CHUNK_SIZE);
+                        
+                        try {
+                            const res = await fetchWithRetry(`${SCRYFALL_API_BASE}/cards/collection`, { 
+                                method: 'POST', 
+                                headers: {'Content-Type': 'application/json'}, 
+                                body: JSON.stringify({ identifiers: chunk }) 
+                            });
+                            
+                            if (res.data) {
+                                found = [...found, ...res.data];
+                            }
+                            
+                            // Respect Scryfall rate limits
+                            if (i + CHUNK_SIZE < ids.length) {
+                                await new Promise(r => setTimeout(r, 100));
+                            }
+                        } catch (chunkError) {
+                            console.error(`Error fetching chunk ${chunkNum}:`, chunkError);
+                            setProgress(`Warning: Some cards in chunk ${chunkNum} could not be fetched`);
+                            await new Promise(r => setTimeout(r, 500));
+                        }
                     }
-                } catch (e) { return showToast("Scryfall Error"); }
+                } catch (e) { 
+                    console.error("Import error:", e);
+                    showToast("Scryfall Error - Partial import may occur"); 
+                    setProgress("Error occurred, processing found cards...");
+                }
+
+                setProgress(`Processing ${found.length} found cards...`);
 
                 const map = new Map();
-                found.forEach(c => { if (c.set && c.collector_number) map.set(`${c.set}:${c.collector_number}`, c); map.set(c.name.toLowerCase(), c); });
+                found.forEach(c => { 
+                    if (c.set && c.collector_number) map.set(`${c.set}:${c.collector_number}`, c); 
+                    map.set(c.name.toLowerCase(), c); 
+                });
+                
                 const newCards = [];
+                let notFoundCount = 0;
+                
                 reqs.forEach(r => {
                     let c = (r.set && r.num) ? map.get(`${r.set}:${r.num}`) : null;
                     if (!c) c = map.get(r.name.toLowerCase());
-                    if (c) { for (let i = 0; i < r.count; i++) { newCards.push({ ...c, id: generateId(), image_url: c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal, isFoil: r.foil, selectedFinish: r.foil ? 'foil' : 'nonfoil' }); } }
+                    
+                    if (c) { 
+                        for (let i = 0; i < r.count; i++) { 
+                            newCards.push({ 
+                                ...c, 
+                                id: generateId(), 
+                                image_url: c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal, 
+                                isFoil: r.foil, 
+                                selectedFinish: r.foil ? 'foil' : 'nonfoil' 
+                            }); 
+                        } 
+                    } else {
+                        notFoundCount++;
+                        console.warn(`Card not found: ${r.name}${r.set ? ` (${r.set})` : ''}`);
+                    }
                 });
+                
                 updateState({ ...currDeck, cards: [...currDeck.cards, ...newCards] }, sideboard);
-                showToast(`Imported ${newCards.length} cards`);
+                
+                const successMsg = `Imported ${newCards.length} cards`;
+                const warningMsg = notFoundCount > 0 ? ` (${notFoundCount} not found)` : '';
+                showToast(successMsg + warningMsg);
+                setProgress('');
             };
 
             const exportDeck = () => {
@@ -692,8 +767,7 @@
             if (loadingDecks) {
                 return <div className="min-h-screen flex items-center justify-center text-yellow-400">Loading Decks from Cloud...</div>;
             }
-
-            return (
+return (
                 <div className="max-w-7xl mx-auto p-4" onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
                     {isDragging && <div id="ghost-overlay" className="fixed inset-0 z-50 pointer-events-none"></div>}
                     {toast && <div className="fixed top-4 right-4 bg-green-600 px-4 py-2 rounded shadow-xl z-50 toast-fade">{toast}</div>}
